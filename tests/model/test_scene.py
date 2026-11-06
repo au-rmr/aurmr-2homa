@@ -16,8 +16,8 @@ GROUP = "manipulator"
 ARM = [f"arm_{n}_joint" for n in
        ("shoulder_pan", "shoulder_lift", "elbow", "wrist_1", "wrist_2", "wrist_3")]
 # As used by the old demos: table in the down position with each pod scene.
-SCENES = [[], ["table_down"], ["pod_full"], ["pod_drop_hide"], ["pod_partial"],
-          ["table_down", "pod_full"], ["table_down", "pod_drop_hide"]]
+SCENES = [[], ["table_down"], ["limits_full"], ["limits_drop_hide"], ["pod_partial"],
+          ["table_down", "limits_full"], ["table_down", "limits_drop_hide"]]
 TOOL_LINKS = {"coupling", "capacitive_cup"}
 SEARCH = 3000
 
@@ -90,7 +90,7 @@ def collisions(ps, model, seed=0):
     return [q for q in qs if ps.is_state_colliding(state(model, q), GROUP)]
 
 
-@pytest.mark.parametrize("names", [["table_down"], ["pod_full"], ["pod_partial"]],
+@pytest.mark.parametrize("names", [["table_down"], ["limits_full"], ["pod_partial"]],
                          ids=lambda n: n[0])
 def test_scene_object_blocks_poses(model, wc, names):
     """Control: without this, an all-clear above could mean nothing was checked."""
@@ -102,9 +102,23 @@ def test_scene_object_blocks_poses(model, wc, names):
 
 def test_scenes_do_not_leak(model, wc):
     ps = scene(model, wc, ["table_down"])
-    ps = scene(model, wc, ["pod_full"])
+    ps = scene(model, wc, ["limits_full"])
     ids = {o.id for o in ps.planning_scene_message.world.collision_objects}
-    assert ids == set(wc["scenes"]["pod_full"])
+    assert ids == set(wc["scenes"]["limits_full"])
+
+
+@pytest.mark.parametrize("limit", ["limits_full", "limits_drop_hide"])
+def test_limit_walls_are_vertical_on_the_limits(wc, limit):
+    bounds = wc["limits"][limit]
+    for name in wc["scenes"][limit]:
+        co = W.collision_object(wc, name)
+        pose, size = co.primitive_poses[0], co.primitives[0].dimensions
+        assert co.header.frame_id == "base_link"
+        assert (pose.orientation.x, pose.orientation.y, pose.orientation.z) == pytest.approx((0, 0, 0))
+        faces = {"x_max": pose.position.x - size[0] / 2, "y_min": pose.position.y + size[1] / 2,
+                 "y_max": pose.position.y - size[1] / 2}
+        side = name.removeprefix(limit + "_")
+        assert faces[side] == pytest.approx(bounds[side])
 
 
 def test_arm_self_collision_detected(model):

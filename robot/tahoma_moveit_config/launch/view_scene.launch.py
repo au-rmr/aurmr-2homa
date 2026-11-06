@@ -47,6 +47,6 @@ def generate_launch_description():
         DeclareLaunchArgument("site_dir"),
         DeclareLaunchArgument("tool", default_value="capcup"),
         DeclareLaunchArgument("pose", default_value="drop_hide"),
-        DeclareLaunchArgument("scene", default_value="pod_drop_hide"),
+        DeclareLaunchArgument("scene", default_value="limits_drop_hide"),
         OpaqueFunction(function=setup),
     ])

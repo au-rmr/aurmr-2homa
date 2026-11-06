@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Opens RViz and a pose/scene picker for checking workcell data. No network, so it cannot reach
-# a robot. Usage: scripts/view_scene.sh [pose:=home] [scene:=pod_full]
+# a robot. Usage: scripts/view_scene.sh [pose:=home] [scene:=limits_full]
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 SITE=${AURMR_SITE:-uw_lab}

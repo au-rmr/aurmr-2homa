@@ -19,9 +19,10 @@ from tahoma_moveit_config import workcell as W
 from tahoma_moveit_config.srdf import ARM_JOINTS
 
 GROUP = "manipulator"
-NO_SCENE = "(no pod scene)"
+NO_SCENE = "(none)"
 TABLE = (0.8, 0.6, 0.4, 0.55)
 POD = (0.2, 0.45, 0.85, 0.3)
+LIMIT = (0.95, 0.75, 0.2, 0.18)
 
 
 def object_markers(wc, names, stamp):
@@ -34,7 +35,7 @@ def object_markers(wc, names, stamp):
         cube.header.stamp = stamp
         cube.pose = co.primitive_poses[0]
         cube.scale.x, cube.scale.y, cube.scale.z = co.primitives[0].dimensions
-        color = TABLE if name.startswith("table") else POD
+        color = TABLE if name.startswith("table") else LIMIT if name.startswith("limits") else POD
         cube.color.r, cube.color.g, cube.color.b, cube.color.a = color
         label = Marker(ns="labels", id=i, type=Marker.TEXT_VIEW_FACING, action=Marker.ADD)
         label.header = cube.header
@@ -68,7 +69,7 @@ class Viewer(QtWidgets.QWidget):
         self.verdict.setAlignment(QtCore.Qt.AlignCenter)
         form = QtWidgets.QFormLayout(self)
         form.addRow("Pose", self.pose)
-        form.addRow("Pod scene", self.scene)
+        form.addRow("Limits / pod", self.scene)
         form.addRow("Table", self.table)
         form.addRow(self.verdict)
         for combo in (self.pose, self.scene):
@@ -111,7 +112,7 @@ def main():
     for name in ("--urdf", "--srdf", "--workcell"):
         parser.add_argument(name, required=True)
     parser.add_argument("--pose", default="drop_hide")
-    parser.add_argument("--scene", default="pod_drop_hide")
+    parser.add_argument("--scene", default="limits_drop_hide")
     parser.add_argument("--no-table", action="store_true")
     args, ros_args = parser.parse_known_args()
     rclpy.init(args=ros_args)

@@ -3,24 +3,24 @@ frames:
   # from pod_location_calibration. rpy = roll, pitch, yaw (old tf args were yaw pitch roll)
   pod_base_link: {parent: base_link, xyz: [1.017, 0.385, -0.028], rpy: [0.041, 0.002, -1.537]}
 
+# Keep-out limits, in base_link (z = 0 is the floor). Inner faces of vertical walls.
+# Not physical objects: they keep planning inside the cell. x_max follows the pod face at
+# table height (~1.00 from the pod calibration); to confirm by tape measure.
+limits:
+  limits_full: {x_max: 1.00, y_min: -1.175, y_max: 1.175}
+  limits_drop_hide: {x_max: 1.00, y_min: -0.975, y_max: 0.975}
+
 objects:
-  # Table has two physical positions. table_up is not measured yet: docs/deferred.md
-  # Real table_down footprint to confirm before S4; the old box overlaps the frame uprights.
-  table_down: {frame: base_link, xyz: [0, 0, 0.76], size: [1.0, 1.5, 0.05]}
-  # Pod boxes carried from aurmr_tasks planning_scene.py
-  pod_front:            {frame: pod_base_link, xyz: [0.4574, 0.025, 1.34], size: [1.8, 0.05, 3.0]}
-  pod_front_drop_hide:  {frame: pod_base_link, xyz: [0.4574, 0.0, 1.34], size: [1.8, 0.05, 3.0]}
-  side_left:            {frame: base_link, xyz: [0.25, 1.20, 1.34], size: [2.0, 0.05, 3.0]}
-  side_right:           {frame: base_link, xyz: [0.25, -1.20, 1.34], size: [2.0, 0.05, 3.0]}
-  side_left_drop_hide:  {frame: base_link, xyz: [0.25, 1.00, 1.34], size: [2.0, 0.05, 3.0]}
-  side_right_drop_hide: {frame: base_link, xyz: [0.25, -1.00, 1.34], size: [2.0, 0.05, 3.0]}
-  pod_col_01:           {frame: pod_base_link, xyz: [0.0, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
-  pod_col_05:           {frame: pod_base_link, xyz: [0.9398, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
-  back_frame:           {frame: base_link, xyz: [-0.28, 0, 1.27], rpy: [0, 0, 1.5707963], size: [1.45, 0.2, 1.5]}
+  # Measured 2026-11-06: top 0.725 above floor, 0.61 x 1.52, far edge 0.13 from the pod face.
+  # Thickness and y centre are assumed. table_up is not measured yet: docs/deferred.md
+  table_down: {frame: base_link, xyz: [0.565, 0, 0.70], size: [0.61, 1.52, 0.05]}
+  # Carried from aurmr_tasks planning_scene.py. These follow the pod frame, so they inherit
+  # its calibrated 2.35 degree tilt: docs/deferred.md
+  pod_col_01: {frame: pod_base_link, xyz: [0.0, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
+  pod_col_05: {frame: pod_base_link, xyz: [0.9398, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
+  back_frame: {frame: base_link, xyz: [-0.28, 0, 1.27], rpy: [0, 0, 1.5707963], size: [1.45, 0.2, 1.5]}
 
 scenes:
-  pod_full: [pod_front, side_left, side_right]
-  pod_drop_hide: [pod_front_drop_hide, side_left_drop_hide, side_right_drop_hide]
   pod_partial: [pod_col_01, pod_col_05, back_frame]
 
 # Joint order: shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3

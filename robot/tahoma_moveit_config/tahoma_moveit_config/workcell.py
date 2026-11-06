@@ -6,9 +6,35 @@ from moveit_msgs.msg import CollisionObject
 from shape_msgs.msg import SolidPrimitive
 
 
+WALL = 0.05
+WALL_HEIGHT = 3.0
+BEHIND = -1.0  # the walls run back this far past the robot
+
+
+def _walls(name, limit):
+    """Vertical keep-out walls with their inner faces on the limits."""
+    x_max, y_min, y_max = limit["x_max"], limit["y_min"], limit["y_max"]
+    z = WALL_HEIGHT / 2
+    x_mid, x_len = (BEHIND + x_max) / 2, x_max - BEHIND
+    y_mid, y_len = (y_min + y_max) / 2, y_max - y_min
+    return {
+        f"{name}_x_max": {"frame": "base_link", "xyz": [x_max + WALL / 2, y_mid, z],
+                          "size": [WALL, y_len, WALL_HEIGHT]},
+        f"{name}_y_min": {"frame": "base_link", "xyz": [x_mid, y_min - WALL / 2, z],
+                          "size": [x_len, WALL, WALL_HEIGHT]},
+        f"{name}_y_max": {"frame": "base_link", "xyz": [x_mid, y_max + WALL / 2, z],
+                          "size": [x_len, WALL, WALL_HEIGHT]},
+    }
+
+
 def load(path):
     with open(path) as f:
-        return yaml.safe_load(f)
+        workcell = yaml.safe_load(f)
+    for name, limit in workcell.get("limits", {}).items():
+        walls = _walls(name, limit)
+        workcell["objects"].update(walls)
+        workcell["scenes"][name] = list(walls)
+    return workcell
 
 
 def _matrix(xyz, rpy):
