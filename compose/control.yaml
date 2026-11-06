@@ -1,0 +1,13 @@
+# Role: control. S1 holds only the network test service.
+x-ros: &ros
+  image: ghcr.io/au-rmr/aurmr-2homa/base:dev
+  build: {context: .., dockerfile: docker/base/Dockerfile}
+  network_mode: host
+  ipc: host
+  env_file: ["../sites/${AURMR_SITE:-uw_lab}/hosts/${AURMR_HOST:?set AURMR_HOST}/ros.env"]
+
+services:
+  net_talker:
+    <<: *ros
+    profiles: [net_test]
+    command: ros2 run demo_nodes_cpp talker

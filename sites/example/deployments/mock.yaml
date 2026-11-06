@@ -1,0 +1,6 @@
+hardware: mock
+roles:
+  control: local
+  compute: local
+  gui: local
+  planner: local

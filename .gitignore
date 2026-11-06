@@ -1,0 +1,10 @@
+build/
+install/
+log/
+third_party/
+__pycache__/
+*.pyc
+*.pth
+*.bag
+*.mcap
+.env
