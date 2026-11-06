@@ -1,0 +1,136 @@
+"""Named poses and scenes, using MoveIt's own collision checking. No ROS graph needed."""
+import os
+import xml.etree.ElementTree as ET
+
+import numpy as np
+import pytest
+from geometry_msgs.msg import Pose
+from moveit.core.planning_scene import PlanningScene
+from moveit.core.robot_model import RobotModel
+from moveit.core.robot_state import RobotState
+from moveit_msgs.msg import CollisionObject
+from shape_msgs.msg import SolidPrimitive
+from tahoma_moveit_config import workcell as W
+
+GROUP = "manipulator"
+ARM = [f"arm_{n}_joint" for n in
+       ("shoulder_pan", "shoulder_lift", "elbow", "wrist_1", "wrist_2", "wrist_3")]
+# As used by the old demos: table in the down position with each pod scene.
+SCENES = [[], ["table_down"], ["pod_full"], ["pod_drop_hide"], ["pod_partial"],
+          ["table_down", "pod_full"], ["table_down", "pod_drop_hide"]]
+TOOL_LINKS = {"coupling", "capacitive_cup"}
+SEARCH = 3000
+
+
+@pytest.fixture(scope="module")
+def wc():
+    return W.load(os.environ["WORKCELL"])
+
+
+@pytest.fixture(scope="module")
+def model():
+    return RobotModel(urdf_xml_path=os.environ["NEW_URDF"], srdf_xml_path=os.environ["NEW_SRDF"])
+
+
+def scene(model, wc, names):
+    """moveit_py gives every PlanningScene the same world, so each call clears it first.
+    Only the most recently built scene is valid: never hold two at once."""
+    ps = PlanningScene(model)
+    ps.remove_all_collision_objects()
+    for name in W.object_names(wc, names):
+        ps.apply_collision_object(W.collision_object(wc, name))
+    return ps
+
+
+def state(model, q):
+    st = RobotState(model)
+    st.set_joint_group_positions(GROUP, list(q))
+    st.update()
+    return st
+
+
+def limits():
+    root = ET.parse(os.environ["NEW_URDF"]).getroot()
+    by_name = {j.get("name"): j.find("limit") for j in root.findall("joint")}
+    return [(float(by_name[n].get("lower")), float(by_name[n].get("upper"))) for n in ARM]
+
+
+def box(name, x, y, z):
+    co = CollisionObject()
+    co.id = name
+    co.header.frame_id = "base_link"
+    co.operation = CollisionObject.ADD
+    co.primitives.append(SolidPrimitive(type=SolidPrimitive.BOX, dimensions=[0.06, 0.06, 0.06]))
+    pose = Pose()
+    pose.position.x, pose.position.y, pose.position.z = float(x), float(y), float(z)
+    pose.orientation.w = 1.0
+    co.primitive_poses.append(pose)
+    return co
+
+
+def test_named_poses_within_joint_limits(wc):
+    bounds = limits()
+    for name, q in wc["named_poses"].items():
+        for value, (low, high) in zip(q, bounds, strict=True):
+            assert low <= value <= high, name
+
+
+@pytest.mark.parametrize("names", SCENES, ids=lambda n: "+".join(n) or "empty")
+def test_named_poses_collision_free(model, wc, names):
+    ps = scene(model, wc, names)
+    hits = [n for n, q in wc["named_poses"].items()
+            if ps.is_state_colliding(state(model, q), GROUP)]
+    assert hits == []
+
+
+def collisions(ps, model, seed=0):
+    bounds = np.array(limits())
+    rng = np.random.default_rng(seed)
+    qs = rng.uniform(bounds[:, 0], bounds[:, 1], size=(SEARCH, 6))
+    return [q for q in qs if ps.is_state_colliding(state(model, q), GROUP)]
+
+
+@pytest.mark.parametrize("names", [["table_down"], ["pod_full"], ["pod_partial"]],
+                         ids=lambda n: n[0])
+def test_scene_object_blocks_poses(model, wc, names):
+    """Control: without this, an all-clear above could mean nothing was checked."""
+    empty = {tuple(q) for q in collisions(scene(model, wc, []), model)}
+    with_scene = {tuple(q) for q in collisions(scene(model, wc, names), model)}
+    assert len(with_scene - empty) > 0
+    assert empty <= with_scene
+
+
+def test_scenes_do_not_leak(model, wc):
+    ps = scene(model, wc, ["table_down"])
+    ps = scene(model, wc, ["pod_full"])
+    ids = {o.id for o in ps.planning_scene_message.world.collision_objects}
+    assert ids == set(wc["scenes"]["pod_full"])
+
+
+def test_arm_self_collision_detected(model):
+    assert len(collisions(scene(model, wc, []), model)) > 0
+
+
+@pytest.mark.parametrize("link", ["arm_forearm_link", "coupling", "capacitive_cup"])
+def test_object_on_link_collides(model, wc, link):
+    """A clear pose stops being clear when a box sits on the link, cup included."""
+    st = state(model, wc["named_poses"]["home"])
+    assert not scene(model, wc, []).is_state_colliding(st, GROUP)
+    x, y, z = st.get_global_link_transform(link)[:3, 3]
+    ps = scene(model, wc, [])
+    ps.apply_collision_object(box("probe", x, y, z))
+    assert ps.is_state_colliding(st, GROUP)
+
+
+def test_far_object_does_not_collide(model, wc):
+    st = state(model, wc["named_poses"]["home"])
+    ps = scene(model, wc, [])
+    ps.apply_collision_object(box("probe", 5.0, 5.0, 5.0))
+    assert not ps.is_state_colliding(st, GROUP)
+
+
+def test_tool_only_adjacent_exceptions():
+    root = ET.parse(os.environ["NEW_SRDF"]).getroot()
+    for e in root.iter("disable_collisions"):
+        if {e.get("link1"), e.get("link2")} & TOOL_LINKS:
+            assert e.get("reason") == "Adjacent", (e.get("link1"), e.get("link2"))

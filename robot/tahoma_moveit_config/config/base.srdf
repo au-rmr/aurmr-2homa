@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<!-- Tool-independent part. srdf.py adds the tool's collision list and the site's named poses. -->
+<robot name="tahoma">
+  <group name="manipulator">
+    <chain base_link="arm_base_link" tip_link="arm_tool0"/>
+  </group>
+  <virtual_joint name="fixed_base" type="fixed" parent_frame="world" child_link="base_link"/>
+</robot>

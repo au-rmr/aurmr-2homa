@@ -19,6 +19,9 @@ ros-jazzy-ur-description
 ros-jazzy-moveit
 ros-jazzy-moveit-py
 
+# IK solver the old stack used
+ros-jazzy-trac-ik-kinematics-plugin
+
 # Control, also provides mock hardware
 ros-jazzy-ros2-control
 ros-jazzy-ros2-controllers

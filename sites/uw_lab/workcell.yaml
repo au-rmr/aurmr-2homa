@@ -1,0 +1,56 @@
+# Workcell data for this site. Robot code reads this; it holds no numbers of its own.
+frames:
+  # from pod_location_calibration. rpy = roll, pitch, yaw (old tf args were yaw pitch roll)
+  pod_base_link: {parent: base_link, xyz: [1.017, 0.385, -0.028], rpy: [0.041, 0.002, -1.537]}
+
+objects:
+  # Table has two physical positions. table_up is not measured yet: docs/deferred.md
+  # Real table_down footprint to confirm before S4; the old box overlaps the frame uprights.
+  table_down: {frame: base_link, xyz: [0, 0, 0.76], size: [1.0, 1.5, 0.05]}
+  # Pod boxes carried from aurmr_tasks planning_scene.py
+  pod_front:            {frame: pod_base_link, xyz: [0.4574, 0.025, 1.34], size: [1.8, 0.05, 3.0]}
+  pod_front_drop_hide:  {frame: pod_base_link, xyz: [0.4574, 0.0, 1.34], size: [1.8, 0.05, 3.0]}
+  side_left:            {frame: base_link, xyz: [0.25, 1.20, 1.34], size: [2.0, 0.05, 3.0]}
+  side_right:           {frame: base_link, xyz: [0.25, -1.20, 1.34], size: [2.0, 0.05, 3.0]}
+  side_left_drop_hide:  {frame: base_link, xyz: [0.25, 1.00, 1.34], size: [2.0, 0.05, 3.0]}
+  side_right_drop_hide: {frame: base_link, xyz: [0.25, -1.00, 1.34], size: [2.0, 0.05, 3.0]}
+  pod_col_01:           {frame: pod_base_link, xyz: [0.0, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
+  pod_col_05:           {frame: pod_base_link, xyz: [0.9398, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
+  back_frame:           {frame: base_link, xyz: [-0.28, 0, 1.27], rpy: [0, 0, 1.5707963], size: [1.45, 0.2, 1.5]}
+
+scenes:
+  pod_full: [pod_front, side_left, side_right]
+  pod_drop_hide: [pod_front_drop_hide, side_left_drop_hide, side_right_drop_hide]
+  pod_partial: [pod_col_01, pod_col_05, back_frame]
+
+# Joint order: shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3
+named_poses:
+  home: [-1.014, -0.463, -1.622, -1.055, -5.264, 3.14]
+  straight: [-1.57, -1.57, 0.0, 0.0, 0.0, 0.0]
+  hide: [2.9, 0.42, -1.38, -2.233, 2.9, -0.088]
+  drop_hide: [0.481187, -2.58483, 0.826937, -2.85292, -1.56556, 0.0]
+  view_table: [-1.0023391882525843, -2.3779450855650843, -2.1446774005889893, -0.0397605460933228, -1.649121109639303, -2.1755431334124964]
+  pre_bin_1h: [0.28546, -1.5792, 1.76497, -0.21801, 0.21011, -1.54197]
+  pre_bin_2h: [0.50034, -0.37549, -2.11816, 2.51696, 0.45871, -1.6277]
+  pre_bin_3h: [1.71365, -1.76256, 2.03284, -0.27217, 1.67462, -1.57007]
+  pre_bin_4h: [2.26478, -1.44517, 1.73215, -0.28669, 2.22584, -1.57078]
+  pre_bin_1g: [0.28463, -1.58072, 1.38525, 0.1611, 0.20689, -1.53975]
+  pre_bin_2g: [0.69108, -1.78764, 1.562, 0.21464, 0.61267, -1.56259]
+  pre_bin_3g: [1.7163, -1.77337, 1.5552, 0.21644, 1.67412, -1.5696]
+  pre_bin_4g: [2.13205, -1.52051, 1.32996, 0.19069, 2.05392, -1.57018]
+  pre_bin_1f: [0.22389, -0.28949, -1.72131, -1.10592, -0.23348, 1.56648]
+  pre_bin_2f: [0.95383, -0.36283, -1.80757, -0.96359, -0.96379, 1.58546]
+  pre_bin_3f: [1.5851, -0.32881, -1.80329, -1.00431, -1.59487, 1.58991]
+  pre_bin_4f: [2.30313, -0.22212, -1.33493, -1.5749, -2.31229, 1.59914]
+  pre_bin_1e: [0.37917, -0.53956, -1.41106, -1.17747, -0.38876, 1.57825]
+  pre_bin_2e: [0.68538, -0.70106, -1.56912, -0.861, -0.69577, 1.58185]
+  pre_bin_3e: [1.56834, -0.58184, -1.43644, -1.11772, -1.57798, 1.59063]
+  pre_bin_4e: [2.24542, -0.51063, -0.85838, -1.76227, -2.25496, 1.60003]
+  pre_bin_3f_eject: [-0.6493213812457483, -1.5164435741356392, -1.5716701745986938, -0.22698946416888433, 0.7113142609596252, 1.6491289138793945]
+  pre_bin_2g_eject: [-1.1779735724078577, -1.4630593222430726, -2.0028741359710693, 0.19994084417309566, 1.2243133783340454, 1.5495624542236328]
+  pre_bin_3g_eject: [-0.5354369322406214, -1.448190101688244, -1.9749424457550049, 0.05137137948956294, 0.589514434337616, 1.6872963905334473]
+  pre_bin_3h_eject: [-0.4538767973529261, -1.4960757207921525, -2.331813097000122, 0.4236031013676147, 0.5080496072769165, 1.7249999046325684]
+  pre_bin_2h_eject: [-1.2001493612872522, -1.6131912670531214, -2.26708984375, 0.628178520793579, 1.2375178337097168, 1.537412405014038]
+  hide_left: [-2.91, -3.16, 1.47, 4.85, 2.83, 3.12]
+  hide_up: [1.19, -3.96, -1.97, -3.44, -1.57, -1.57]
+  tote_approach: [2.86, -1.47, 1.58, 4.75, 1.59, 4.83]
