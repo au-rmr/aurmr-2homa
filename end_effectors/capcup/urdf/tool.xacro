@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<!-- Coupling + capacitive cup. There is no cup mesh, the cylinder is the model. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="tool" params="parent">
+    <link name="coupling">
+      <visual>
+        <geometry><mesh filename="package://capcup/meshes/coupling.stl"/></geometry>
+        <material name="tool_black"><color rgba="0.1 0.1 0.1 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.0335 0 0"/>
+        <geometry><mesh filename="package://capcup/meshes/connector_cover.stl"/></geometry>
+        <material name="tool_black"/>
+      </visual>
+      <collision>
+        <origin xyz="${(0.015 / 2) + 0.0335} 0 -0.013"/>
+        <geometry><box size=".015 0.033 .056"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 ${.0169 / 2}"/>
+        <geometry><cylinder radius=".0375" length=".0169"/></geometry>
+      </collision>
+    </link>
+    <joint name="${parent}-coupling_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="coupling"/>
+      <origin xyz="0 0 0" rpy="0 0 ${1.5 * pi}"/>
+    </joint>
+    <link name="capacitive_cup">
+      <collision>
+        <origin xyz="0 0 ${.177 / 2}"/>
+        <geometry><cylinder radius=".0375" length=".177"/></geometry>
+      </collision>
+    </link>
+    <joint name="gripper_base" type="fixed">
+      <parent link="coupling"/>
+      <child link="capacitive_cup"/>
+      <origin xyz="0 0 .0169"/>
+    </joint>
+    <link name="gripper_equilibrium_grasp"/>
+    <joint name="capacitive_cup_gripper_equilibrium_grasp" type="fixed">
+      <parent link="capacitive_cup"/>
+      <child link="gripper_equilibrium_grasp"/>
+      <origin xyz="0 0 0.177"/>
+    </joint>
+  </xacro:macro>
+</robot>

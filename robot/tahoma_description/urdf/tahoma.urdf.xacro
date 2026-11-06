@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!-- Frame + arm + one tool. kinematics_params: the arm's calibration, from sites/<site>/calibration.
+     tool_xacro: a file defining macro `tool` params="parent"; each tool has urdf/tool.xacro. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="tahoma">
+  <xacro:arg name="kinematics_params" default="$(find ur_description)/config/ur16e/default_kinematics.yaml"/>
+  <xacro:arg name="tool_xacro" default="$(find capcup)/urdf/tool.xacro"/>
+  <xacro:property name="ur_config" value="$(find ur_description)/config/ur16e"/>
+  <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+  <xacro:include filename="$(find tahoma_description)/urdf/stand.xacro"/>
+  <xacro:include filename="$(arg tool_xacro)"/>
+
+  <link name="base_link"/>
+  <joint name="base_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="stand"/>
+    <origin xyz="0 0 0.15" rpy="0 0 0"/>
+  </joint>
+  <xacro:stand/>
+
+  <xacro:ur_robot name="tahoma" tf_prefix="arm_" parent="robot_plate"
+      joint_limits_parameters_file="${ur_config}/joint_limits.yaml"
+      kinematics_parameters_file="$(arg kinematics_params)"
+      physical_parameters_file="${ur_config}/physical_parameters.yaml"
+      visual_parameters_file="${ur_config}/visual_parameters.yaml">
+    <origin xyz="0 0.00175 -0.00885" rpy="0 ${pi} ${1.5 * pi}"/>
+  </xacro:ur_robot>
+
+  <!-- Camera mounts are fixed parts of the frame, so they stay as obstacles.
+       The cameras themselves are deferred: docs/deferred.md -->
+  <xacro:macro name="camera_mount" params="side y yaw">
+    <link name="camera_lower_${side}_mount">
+      <collision>
+        <geometry><box size=".1 .15 .15"/></geometry>
+      </collision>
+    </link>
+    <joint name="camera_beam_lower_camera_lower_${side}_mount_joint" type="fixed">
+      <parent link="camera_beam_lower"/>
+      <child link="camera_lower_${side}_mount"/>
+      <origin xyz="0.02 ${y} 0.14" rpy="${pi / 2} ${radians(15)} ${yaw}"/>
+    </joint>
+  </xacro:macro>
+  <xacro:camera_mount side="left" y="${-0.0215 + 0.25}" yaw="${-atan2(0.25, 1.4)}"/>
+  <xacro:camera_mount side="right" y="${0.0215 - 0.25}" yaw="${atan2(0.25, 1.4)}"/>
+
+  <xacro:tool parent="arm_tool0"/>
+</robot>

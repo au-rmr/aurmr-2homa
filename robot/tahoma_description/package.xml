@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>tahoma_description</name>
+  <version>0.1.0</version>
+  <description>Workcell frame and UR16e arm. Tools attach through the tool argument; tables, pods and calibration come from the site.</description>
+  <maintainer email="choialex@uw.edu">Alex Choi</maintainer>
+  <license>TBD</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>ur_description</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

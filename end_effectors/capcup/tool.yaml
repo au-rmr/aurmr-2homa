@@ -1,0 +1,6 @@
+# Read at startup. See build plan S0: skills check capabilities against this.
+name: capcup
+urdf: urdf/tool.xacro
+tcp_link: gripper_equilibrium_grasp
+mass_kg: null   # to be measured before S4
+capabilities: [contact, suction]
