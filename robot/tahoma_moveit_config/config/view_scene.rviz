@@ -1,0 +1,48 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: base_link
+    Frame Rate: 30
+  Name: root
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid (1 m cells, floor)
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 6
+      Reference Frame: base_link
+    - Class: rviz_default_plugins/RobotModel
+      Name: Robot (collision shapes)
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+        Durability Policy: Transient Local
+      Visual Enabled: false
+      Collision Enabled: true
+      Alpha: 0.9
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Scene objects
+      Enabled: true
+      Topic:
+        Value: /workcell_objects
+        Durability Policy: Transient Local
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: false
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 4.8
+      Focal Point: {X: 0.4, Y: 0, Z: 1.0}
+      Pitch: 0.25
+      Yaw: 0.55
+Window Geometry:
+  Width: 1200
+  Height: 800

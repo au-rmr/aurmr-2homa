@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 project(capcup)
 find_package(ament_cmake REQUIRED)
-install(DIRECTORY urdf meshes DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY urdf meshes moveit DESTINATION share/${PROJECT_NAME})
 install(FILES tool.yaml DESTINATION share/${PROJECT_NAME})
 ament_package()
