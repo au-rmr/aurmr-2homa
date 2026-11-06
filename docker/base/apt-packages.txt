@@ -1,0 +1,24 @@
+# apt packages baked into the image. One per line, # starts a comment.
+# Nothing here is installed on the host. To add one: add it here, say what needs it,
+# then run scripts/build_image.sh.
+
+# DDS
+ros-jazzy-rmw-cyclonedds-cpp
+
+# Network tests (tests/net)
+ros-jazzy-demo-nodes-cpp
+ros-jazzy-demo-nodes-py
+
+# Robot model
+ros-jazzy-xacro
+ros-jazzy-robot-state-publisher
+ros-jazzy-joint-state-publisher
+ros-jazzy-ur-description
+
+# Planning
+ros-jazzy-moveit
+ros-jazzy-moveit-py
+
+# Control, also provides mock hardware
+ros-jazzy-ros2-control
+ros-jazzy-ros2-controllers
