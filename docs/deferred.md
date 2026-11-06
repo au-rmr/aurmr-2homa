@@ -10,3 +10,4 @@ Things left out for now, with what must happen before they are needed.
 | Acceleration limits (off in the old MoveIt config) | S2 | S4 | Set real values, because time parameterization needs them |
 | Pod frame tilt | S2 | S8 | Calibration has 2.35 degrees of roll, but the real pod is vertical, and it puts the pod face 5 to 8 cm from the measured x = 0.95 below 2 m height. Recalibrate before bin moves rely on pod_base_link. pod_partial boxes inherit it |
 | Limits as UR safety planes | S2 | S4 | Option: put limits_full on the UR controller too, so they hold even if our software is wrong |
+| Unexplained mock test failure | S2 | Before S4 | `scripts/test_mock.sh` failed once in 24 runs (2026-11-06). The failing test name was not kept. 75 of 75 repeat plans passed and 20 later full runs passed. If it recurs, keep the full output |

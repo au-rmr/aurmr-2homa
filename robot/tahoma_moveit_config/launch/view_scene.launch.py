@@ -2,27 +2,22 @@
 import os
 import tempfile
 
-import xacro
 from ament_index_python.packages import get_package_share_directory as share
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction, Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-from tahoma_moveit_config.srdf import compose
+from tahoma_moveit_config.model import robot_description, robot_semantic
 
 
 def setup(context):
     get = lambda name: LaunchConfiguration(name).perform(context)
     site, tool = get("site_dir"), get("tool")
     pkg = share("tahoma_moveit_config")
-    urdf = xacro.process_file(
-        os.path.join(share("tahoma_description"), "urdf", "tahoma.urdf.xacro"),
-        mappings={"kinematics_params": os.path.join(site, "calibration", "arm_kinematics.yaml"),
-                  "tool_xacro": os.path.join(share(tool), "urdf", "tool.xacro")}).toxml()
+    urdf = robot_description(site, tool)
+    srdf = robot_semantic(site, tool)
     workcell = os.path.join(site, "workcell.yaml")
-    srdf = compose(os.path.join(pkg, "config", "base.srdf"),
-                   os.path.join(share(tool), "moveit", "collisions.srdf"), workcell)
     out = tempfile.mkdtemp()
     urdf_path, srdf_path = os.path.join(out, "m.urdf"), os.path.join(out, "m.srdf")
     with open(urdf_path, "w") as f:
