@@ -4,16 +4,17 @@ frames:
   pod_base_link: {parent: base_link, xyz: [1.017, 0.385, -0.028], rpy: [0.041, 0.002, -1.537]}
 
 # Keep-out limits, in base_link (z = 0 is the floor). Inner faces of vertical walls.
-# Not physical objects: they keep planning inside the cell. x_max follows the pod face at
-# table height (~1.00 from the pod calibration); to confirm by tape measure.
+# Not physical objects: they keep planning inside the cell.
+# x_max is the pod face, measured 50 cm from the frame base front edge (x = 0.45).
 limits:
-  limits_full: {x_max: 1.00, y_min: -1.175, y_max: 1.175}
-  limits_drop_hide: {x_max: 1.00, y_min: -0.975, y_max: 0.975}
+  limits_full: {x_max: 0.95, y_min: -1.175, y_max: 1.175}
+  limits_drop_hide: {x_max: 0.95, y_min: -0.975, y_max: 0.975}
 
 objects:
-  # Measured 2026-11-06: top 0.725 above floor, 0.61 x 1.52, far edge 0.13 from the pod face.
-  # Thickness and y centre are assumed. table_up is not measured yet: docs/deferred.md
-  table_down: {frame: base_link, xyz: [0.565, 0, 0.70], size: [0.61, 1.52, 0.05]}
+  # Measured 2026-11-06: top 0.725 above floor, 0.61 x 1.52, far edge 0.13 from the pod face,
+  # left edge 0.17 inside the frame base left edge (y = 0.765, facing the pod).
+  # Thickness is assumed. table_up is not measured yet: docs/deferred.md
+  table_down: {frame: base_link, xyz: [0.515, -0.165, 0.70], size: [0.61, 1.52, 0.05]}
   # Carried from aurmr_tasks planning_scene.py. These follow the pod frame, so they inherit
   # its calibrated 2.35 degree tilt: docs/deferred.md
   pod_col_01: {frame: pod_base_link, xyz: [0.0, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
