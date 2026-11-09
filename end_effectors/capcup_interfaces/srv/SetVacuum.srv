@@ -1,0 +1,8 @@
+# The ejector's valve. Values match the old ROS 1 driver's EJECTOR_CONTROL.
+uint8 OFF=0
+uint8 SUCK=1
+uint8 BLOW=2              # blow-off: releases the item
+uint8 mode
+---
+bool success
+string message

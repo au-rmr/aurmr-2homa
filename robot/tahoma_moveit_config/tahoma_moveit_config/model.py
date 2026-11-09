@@ -1,5 +1,6 @@
 """Builds the robot description and SRDF for a site and tool."""
 import os
+import tempfile
 
 import xacro
 import yaml
@@ -19,17 +20,39 @@ def _mock_hardware(initial):
             f"{joints}</ros2_control>")
 
 
-def robot_description(site_dir, tool, mock_start=None):
-    """mock_start: a named pose; adds mock hardware that starts there."""
+def _named_pose(site_dir, name):
+    with open(os.path.join(site_dir, "workcell.yaml")) as f:
+        return yaml.safe_load(f)["named_poses"][name]
+
+
+def robot_description(site_dir, tool, mock_start=None, hardware=None, robot_ip="0.0.0.0",
+                      headless=False):
+    """hardware: None (model only), "mock" (generic mock), "ur_mock" (UR driver's mock), "ur".
+
+    mock_start: the named pose mock hardware starts at.
+    """
+    mappings = {"kinematics_params": os.path.join(site_dir, "calibration", "arm_kinematics.yaml"),
+                "tool_xacro": os.path.join(share(tool), "urdf", "tool.xacro")}
+    if hardware is None and mock_start is not None:
+        hardware = "mock"   # older callers
+    if hardware in ("ur", "ur_mock"):
+        mappings.update(ur_control="true", robot_ip=robot_ip,
+                        use_mock_hardware=str(hardware == "ur_mock").lower(),
+                        headless_mode=str(headless).lower())
+        if mock_start is not None:
+            names = [n.removeprefix("arm_") for n in ARM_JOINTS]
+            start = dict(zip(names, map(float, _named_pose(site_dir, mock_start)), strict=True))
+            f = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False)
+            yaml.safe_dump(start, f)
+            f.close()
+            mappings["initial_positions_file"] = f.name
     urdf = xacro.process_file(
         os.path.join(share("tahoma_description"), "urdf", "tahoma.urdf.xacro"),
-        mappings={"kinematics_params": os.path.join(site_dir, "calibration", "arm_kinematics.yaml"),
-                  "tool_xacro": os.path.join(share(tool), "urdf", "tool.xacro")}).toxml()
-    if mock_start is None:
-        return urdf
-    with open(os.path.join(site_dir, "workcell.yaml")) as f:
-        initial = yaml.safe_load(f)["named_poses"][mock_start]
-    return urdf.replace("</robot>", _mock_hardware(initial) + "</robot>")
+        mappings=mappings).toxml()
+    if hardware == "mock":
+        initial = _named_pose(site_dir, mock_start or "home")
+        urdf = urdf.replace("</robot>", _mock_hardware(initial) + "</robot>")
+    return urdf
 
 
 def robot_semantic(site_dir, tool):

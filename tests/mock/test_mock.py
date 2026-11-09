@@ -1,10 +1,11 @@
-"""Planning and execution on mock hardware through MoveIt's action and scene interfaces."""
+"""Planning on mock hardware through MoveIt's action and scene interfaces, and the private
+domain that keeps everything but motion_server away from the controllers."""
 import os
+import subprocess
 import time
 
 import pytest
 import rclpy
-from control_msgs.action import FollowJointTrajectory
 from geometry_msgs.msg import PoseStamped
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import (BoundingVolume, CollisionObject, Constraints, JointConstraint,
@@ -14,6 +15,7 @@ from moveit_msgs.srv import ApplyPlanningScene
 from rclpy.action import ActionClient
 from sensor_msgs.msg import JointState
 from shape_msgs.msg import SolidPrimitive
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from tahoma_moveit_config import workcell as W
 from tahoma_moveit_config.srdf import ARM_JOINTS
 
@@ -31,10 +33,7 @@ class Client:
         self.node.create_subscription(JointState, "joint_states", self.on_joints, 10)
         self.wc = W.load(os.environ["WORKCELL"])
         self.placed = []
-        # move_group comes up before the controller does, and execution fails until it exists.
-        controller = ActionClient(self.node, FollowJointTrajectory,
-                                  "arm_controller/follow_joint_trajectory")
-        assert controller.wait_for_server(timeout_sec=60)
+        # robot.launch.py starts move_group after the controller is active.
         assert self.move.wait_for_server(timeout_sec=60)
         assert self.apply.wait_for_service(timeout_sec=60)
 
@@ -124,12 +123,59 @@ def test_starts_at_home(client):
     assert client.at("home")
 
 
-def test_plan_and_execute_named_pose(client):
+def test_moveit_plans_but_cannot_execute(client):
+    """MoveIt has no controllers: motion_server is the only way to move (T12 item 3)."""
     client.scene("table_down", "limits_drop_hide")
-    assert client.run(client.joint_goal("drop_hide"), execute=True) == MoveItErrorCodes.SUCCESS
-    assert client.at("drop_hide")
-    assert client.run(client.joint_goal("home"), execute=True) == MoveItErrorCodes.SUCCESS
+    assert client.run(client.joint_goal("drop_hide"), execute=False) == MoveItErrorCodes.SUCCESS
+    assert client.run(client.joint_goal("drop_hide"), execute=True) != MoveItErrorCodes.SUCCESS
+    time.sleep(0.5)
     assert client.at("home")
+
+
+PRIVATE = os.environ.get("AURMR_PRIVATE_DOMAIN", "142")
+
+
+def ros2(*args, domain=None, timeout=20):
+    env = dict(os.environ)
+    if domain is not None:
+        env["ROS_DOMAIN_ID"] = domain
+        env["CYCLONEDDS_URI"] = os.environ.get("AURMR_PRIVATE_URI", "")
+    return subprocess.run(["ros2", *args], capture_output=True, text=True, timeout=timeout, env=env)
+
+
+def test_controllers_unreachable_from_the_shared_domain(client):
+    """On the shared domain nothing of ros2_control exists: no controller topic or action, no
+    controller manager. One message on the controller's topic used to move the wrist 0.1 rad."""
+    names = ros2("node", "list", "--no-daemon", "-a").stdout.split()
+    assert "/motion_server" in names   # control: discovery worked
+    # MoveIt's own /moveit_simple_controller_manager is fine: it has no controllers.
+    leaks = [n for n in names if n == "/controller_manager" or "arm_controller" in n
+             or "broadcaster" in n]
+    assert leaks == [], names
+    topics = ros2("topic", "list", "--no-daemon").stdout
+    assert "/arm_controller/joint_trajectory" not in topics, topics
+    assert "/joint_states" in topics   # copied out by motion_server
+    actions = ros2("action", "list").stdout
+    assert "/arm_controller/follow_joint_trajectory" not in actions, actions
+    pub = client.node.create_publisher(JointTrajectory, "/arm_controller/joint_trajectory", 10)
+    t = JointTrajectory(joint_names=ARM_JOINTS)
+    point = JointTrajectoryPoint(positions=[client.joints[n] for n in ARM_JOINTS])
+    point.positions[-1] += 0.1
+    point.time_from_start.sec = 1
+    t.points = [point]
+    for _ in range(5):
+        pub.publish(t)
+        time.sleep(0.1)
+    time.sleep(1.5)
+    rclpy.spin_once(client.node, timeout_sec=0.2)
+    assert client.at("home")
+    client.node.destroy_publisher(pub)
+
+
+def test_controllers_reachable_from_the_private_domain():
+    """Control for the test above: the controllers are there, on the private domain."""
+    out = ros2("control", "list_controllers", domain=PRIVATE).stdout
+    assert "arm_controller" in out and "active" in out, out
 
 
 @pytest.mark.parametrize("names, xyz, quat", [

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- motion_server's shared domain: the same settings as the image's /etc/cyclonedds.xml, but for
+     this process's own domain only, so they don't also apply to the private domain. -->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="${ROS_DOMAIN_ID:-0}">
+    <General>
+      <Interfaces>
+        <NetworkInterface address="${ROBOT_LAN_IP}" priority="default" multicast="default"/>
+      </Interfaces>
+    </General>
+    <Internal>
+      <SocketReceiveBufferSize min="2MB"/>
+    </Internal>
+  </Domain>
+</CycloneDDS>

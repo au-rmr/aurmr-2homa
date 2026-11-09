@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>tahoma_robot</name>
+  <version>0.1.0</version>
+  <description>Python robot API: plans with MoveIt, runs moves through the motion server.</description>
+  <maintainer email="choialex@uw.edu">Alex Choi</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <exec_depend>action_msgs</exec_depend>
+  <exec_depend>bondpy</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>tahoma_interfaces</exec_depend>
+  <exec_depend>tahoma_moveit_config</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

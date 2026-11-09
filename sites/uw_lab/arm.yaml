@@ -1,0 +1,5 @@
+# The arm at this site. The control host reaches it through its own adapter.
+robot_ip: 192.168.43.92     # UR16e; emmons is 192.168.43.1 on the "UR network" adapter
+ur_type: ur16e
+# The driver compares this with the arm at start and logs an error if they differ.
+kinematics_hash: calib_3044584041984148205

@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>capcup_driver</name>
+  <version>0.1.0</version>
+  <description>Drivers for the capacitive suction cup: cap board bridge, contact, haptic search, vacuum ejector.</description>
+  <maintainer email="choialex@uw.edu">Alex Choi</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <exec_depend>capcup</exec_depend>
+  <exec_depend>capcup_interfaces</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

@@ -1,0 +1,24 @@
+# Runs one planned trajectory on the arm. Forces are the change from the reading just before motion.
+trajectory_msgs/JointTrajectory trajectory
+string bond_id            # the guard this client holds; only its holder can move the arm
+float64 force_limit_n     # required, > 0, at most the server's max_force_limit_n (150). Passing it aborts the move.
+float64 stop_force_n      # 0 = none, else > 0 and finite. Passing it is an expected stop.
+string[] stop_signals     # names the tool declares, e.g. contact, seal
+---
+uint8 UNSET=0              # an empty result reads as this, never as DONE
+uint8 DONE=1
+uint8 STOPPED_FORCE=2
+uint8 STOPPED_SIGNAL=3
+uint8 STOPPED_REQUEST=4
+uint8 ABORTED_FORCE_LIMIT=5
+uint8 ABORTED_SENSOR_STALE=6
+uint8 ABORTED_GUARD_LOST=7
+uint8 REJECTED=8
+uint8 FAILED=9
+uint8 ABORTED_STALLED=10    # speed scaling at 0 too long (slider, protective stop) or far over time
+uint8 outcome
+string message
+string stop_signal        # which signal fired
+float64 peak_force_n
+sensor_msgs/JointState final_state
+---

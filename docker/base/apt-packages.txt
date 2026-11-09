@@ -22,9 +22,20 @@ ros-jazzy-moveit-py
 # IK solver the old stack used
 ros-jazzy-trac-ik-kinematics-plugin
 
+# Motion guard
+ros-jazzy-bondcpp
+ros-jazzy-bondpy
+
 # Control, also provides mock hardware
 ros-jazzy-ros2-control
 ros-jazzy-ros2-controllers
 
+# Real arm (S4): UR driver, scaled trajectory controller, speed scaling broadcaster.
+# Also has mock hardware with the same controllers, used by tests/robot_mock.
+ros-jazzy-ur-robot-driver
+
 # RViz and its MoveIt plugins come with ros-jazzy-moveit. Listed so a removal is noticed.
 ros-jazzy-rviz2
+
+# pip, only to install docker/base/pip-packages.txt
+python3-pip

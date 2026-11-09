@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>tahoma_control</name>
+  <version>0.1.0</version>
+  <description>Motion server: the one path to the arm. Runs trajectories, watches force and stop signals, holds the motion guard.</description>
+  <maintainer email="choialex@uw.edu">Alex Choi</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>bondcpp</depend>
+  <depend>control_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>tahoma_interfaces</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

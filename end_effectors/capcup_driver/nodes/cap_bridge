@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Receives the cap board's UDP packets and publishes each one on /cap_data.
+
+Packet: little-endian uint64 device time in ms, then 8 int32 counts (as the old bridge read it).
+Runs on the host the board streams to. Parameter: port.
+"""
+import socket
+import struct
+import threading
+
+import rclpy
+from capcup_interfaces.msg import CapData
+from rclpy.qos import qos_profile_sensor_data
+
+PACKET = struct.Struct("<Q8l")
+
+
+def main():
+    rclpy.init()
+    node = rclpy.create_node("cap_bridge")
+    port = node.declare_parameter("port", 12345).value
+    pub = node.create_publisher(CapData, "/cap_data", qos_profile_sensor_data)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("", port))
+    sock.settimeout(0.5)
+    bad = [0]
+
+    def receive():
+        while rclpy.ok():
+            try:
+                raw, _ = sock.recvfrom(1024)
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            if len(raw) != PACKET.size:
+                bad[0] += 1
+                if bad[0] in (1, 10, 100, 1000):
+                    node.get_logger().warning(f"{bad[0]} packets of the wrong size ({len(raw)} bytes)")
+                continue
+            ms, *values = PACKET.unpack(raw)
+            msg = CapData(device_time_s=ms * 1e-3, values=values)
+            msg.header.stamp = node.get_clock().now().to_msg()
+            pub.publish(msg)
+
+    threading.Thread(target=receive, daemon=True).start()
+    node.get_logger().info(f"listening for the cap board on UDP {port}")
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+    sock.close()
+
+
+if __name__ == "__main__":
+    main()

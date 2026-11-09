@@ -1,4 +1,6 @@
-# Role: control. S1 holds only the network test service.
+# Role: control: the arm's driver, controllers, motion_server and MoveIt.
+# Real arm (S4): AURMR_HOST=<control host> docker compose -f compose/control.yaml --profile robot up
+# The repo is built at start into a volume; a prebuilt overlay image comes later (docs/deferred.md).
 x-ros: &ros
   image: ghcr.io/au-rmr/aurmr-2homa/base:dev
   build: {context: .., dockerfile: docker/base/Dockerfile}
@@ -11,3 +13,43 @@ services:
     <<: *ros
     profiles: [net_test]
     command: ros2 run demo_nodes_cpp talker
+
+  robot:
+    <<: *ros
+    profiles: [robot]
+    volumes:
+      - ..:/repo:ro
+      - robot_ws:/ws
+    # UR driver real-time scheduling, as Phase 2 proved on the control host.
+    cap_add: [SYS_NICE]
+    ulimits:
+      rtprio: 99
+      memlock: 102400
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+      colcon --log-base /ws/log build --base-paths /repo/robot /repo/end_effectors
+      --build-base /ws/build --install-base /ws/install &&
+      source /ws/install/setup.bash &&
+      exec ros2 launch tahoma_moveit_config robot.launch.py hardware:=ur
+      site_dir:=/repo/sites/$${AURMR_SITE:-uw_lab}"
+    restart: "no"
+
+  # The capcup's vacuum ejector, wired to this host. Profile tool.
+  vacuum:
+    <<: *ros
+    profiles: [tool]
+    volumes:
+      - ..:/repo:ro
+      - tool_ws:/ws
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+      colcon --log-base /ws/log build --base-paths /repo/end_effectors
+      --build-base /ws/build --install-base /ws/install &&
+      source /ws/install/setup.bash &&
+      exec ros2 launch capcup_driver capcup.launch.py part:=control
+      site_dir:=/repo/sites/$${AURMR_SITE:-uw_lab}"
+    restart: "no"
+
+volumes:
+  robot_ws:
+  tool_ws:

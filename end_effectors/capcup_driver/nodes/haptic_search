@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""Publishes pose changes in the tool frame and ~alignment at 50 Hz.
+
+The search alternates its steps, as the old node did: ~proposed_turn (tilt to level the
+contact, no sideways move) and ~proposed_move (sideways towards the loaded side, no tilt). Both
+also move along the axis towards the target load. The old node published both on one topic, so
+a caller got whichever came next; separate topics let the demo alternate on purpose. When the
+contact is already level the turn is undefined (NaN in the old code) and nothing is published
+on ~proposed_turn.
+
+Stops publishing when /cap_data is older than 0.2 s, so a stale proposal can't be used.
+The old node kept publishing its last numbers. Parameter: frame (the tool's TCP link).
+"""
+import rclpy
+from capcup_interfaces.msg import CapData
+from geometry_msgs.msg import PoseStamped
+from rclpy.qos import qos_profile_sensor_data
+from std_msgs.msg import Bool
+
+from capcup_driver.haptic import HapticSearch
+
+STALE_S = 0.2
+
+
+def main():
+    rclpy.init()
+    node = rclpy.create_node("haptic_search")
+    frame = node.declare_parameter("frame", "gripper_equilibrium_grasp").value
+    search = HapticSearch()
+    last = [None]
+    turn_pub = node.create_publisher(PoseStamped, "~/proposed_turn", 1)
+    move_pub = node.create_publisher(PoseStamped, "~/proposed_move", 1)
+    aligned_pub = node.create_publisher(Bool, "~/alignment", 1)
+
+    def on_data(m):
+        search.update(m.device_time_s, m.values)
+        last[0] = node.get_clock().now()
+
+    def tick():
+        now = node.get_clock().now()
+        if last[0] is None or (now - last[0]).nanoseconds * 1e-9 > STALE_S:
+            return
+        proposal = search.step()
+        if proposal is not None:
+            t, q = proposal
+            msg = PoseStamped()
+            msg.header.stamp = now.to_msg()
+            msg.header.frame_id = frame
+            p, o = msg.pose.position, msg.pose.orientation
+            p.x, p.y, p.z = map(float, t)
+            o.x, o.y, o.z, o.w = map(float, q)
+            (turn_pub if search.last_was_turn else move_pub).publish(msg)
+        aligned = search.aligned()
+        if aligned is not None:
+            aligned_pub.publish(Bool(data=aligned))
+
+    node.create_subscription(CapData, "/cap_data", on_data, qos_profile_sensor_data)
+    node.create_timer(0.02, tick)
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+
+
+if __name__ == "__main__":
+    main()

@@ -21,6 +21,22 @@ objects:
   pod_col_05: {frame: pod_base_link, xyz: [0.9398, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
   back_frame: {frame: base_link, xyz: [-0.28, 0, 1.27], rpy: [0, 0, 1.5707963], size: [1.45, 0.2, 1.5]}
 
+# The pod's fabric bins, generated into a scene of the same name (tahoma_moveit_config.workcell).
+# Pod 1 face A, from the old tahoma_description pod.xacro (pod1_recipe_790-00265-021,
+# "corresponds to reality"): origin = BRACE_TO_FABRIC_XY_OFFSET 0.004 and
+# BASE_HEIGHT 0.265 + BRACE_TO_FABRIC_Z_OFFSET 0.085. Follows pod_base_link, so it inherits the
+# calibration's tilt (docs/deferred.md): recalibrate before relying on it.
+pods:
+  pod_bins:
+    frame: pod_base_link
+    origin: [0.004, 0.004, 0.350]
+    columns: 4
+    bin_width: 0.234
+    depth: 0.152
+    row_heights: [0.234, 0.166, 0.173, 0.146, 0.187, 0.160, 0.116, 0.223, 0.146, 0.223, 0.146, 0.261]
+    flap_height: 0.032
+    min_wall: 0.01
+
 scenes:
   pod_partial: [pod_col_01, pod_col_05, back_frame]
 

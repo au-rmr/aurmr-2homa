@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Runs one cap_cup pick. Usage: run [--site-dir DIR]. Needs the robot stack and the capcup
+drivers running. Prints the outcome; exits 0 when picked."""
+import argparse
+import os
+import sys
+
+import yaml
+from aurmr_skills import load_tool
+from tahoma_robot import Robot
+
+from cap_cup_demo.task import Config, pick
+
+FORCE_LIMIT_N = 50.0   # the old LIFT_OBJ limit; now the whole session's
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--site-dir", default=os.environ.get("AURMR_SITE_DIR", "/repo/sites/uw_lab"))
+    args = p.parse_args()
+    with open(os.path.join(args.site_dir, "demos", "cap_cup.yaml")) as f:
+        cfg = Config(**yaml.safe_load(f))
+    workcell = os.path.join(args.site_dir, "workcell.yaml")
+    with Robot.connect("capcup", FORCE_LIMIT_N, workcell) as robot, \
+            load_tool(robot, needs=["contact", "suction"]) as cup:
+        outcome, details = pick(robot, cup, cfg, log=lambda m: print(m, flush=True))
+    print(f"OUTCOME {outcome} {details}", flush=True)
+    sys.exit(0 if outcome == "picked" else 1)
+
+
+if __name__ == "__main__":
+    main()

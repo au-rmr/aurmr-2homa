@@ -1,0 +1,5 @@
+# Starts the motion guard. The caller then starts a bond with the same id on /tahoma/bond.
+string bond_id
+---
+bool accepted
+string message

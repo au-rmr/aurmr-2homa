@@ -1,4 +1,5 @@
-# Role: compute. S1 holds only the network test service.
+# Role: compute: demos and the operator's shell.
+# Shell with the robot API: AURMR_HOST=<compute host> docker compose -f compose/compute.yaml run --rm shell
 x-ros: &ros
   image: ghcr.io/au-rmr/aurmr-2homa/base:dev
   build: {context: .., dockerfile: docker/base/Dockerfile}
@@ -11,3 +12,39 @@ services:
     <<: *ros
     profiles: [net_test]
     command: ros2 run demo_nodes_cpp listener
+
+  shell:
+    <<: *ros
+    profiles: [cli]
+    volumes:
+      - ..:/repo:ro
+      - shell_ws:/ws
+    environment:
+      WORKCELL: /repo/sites/${AURMR_SITE:-uw_lab}/workcell.yaml
+    stdin_open: true
+    tty: true
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+      colcon --log-base /ws/log build --base-paths /repo/robot /repo/end_effectors /repo/skills /repo/demos
+      --build-base /ws/build --install-base /ws/install >/ws/colcon.txt &&
+      source /ws/install/setup.bash && cd /repo && exec bash"
+
+  # The capcup's board streams to this host: bridge, contact detector, haptic search. Profile tool.
+  capcup:
+    <<: *ros
+    profiles: [tool]
+    volumes:
+      - ..:/repo:ro
+      - tool_ws:/ws
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+      colcon --log-base /ws/log build --base-paths /repo/end_effectors
+      --build-base /ws/build --install-base /ws/install &&
+      source /ws/install/setup.bash &&
+      exec ros2 launch capcup_driver capcup.launch.py part:=compute
+      site_dir:=/repo/sites/$${AURMR_SITE:-uw_lab}"
+    restart: "no"
+
+volumes:
+  shell_ws:
+  tool_ws:

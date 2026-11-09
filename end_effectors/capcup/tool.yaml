@@ -2,5 +2,11 @@
 name: capcup
 urdf: urdf/tool.xacro
 tcp_link: gripper_equilibrium_grasp
-mass_kg: null   # to be measured before S4
+mass_kg: 0.205  # user, 2026-11-09
+cog_m: [0.0, 0.0, 0.1054]   # from arm_tool0; user 2026-11-09: middle of the cup cylinder (0.0169 + 0.177/2)
 capabilities: [contact, suction]
+client: capcup_driver.client:CapCup   # built by aurmr_skills.load_tool(robot)
+# Bool topics a move can stop on. The topics are published by the tool's drivers (S5).
+stop_signals:
+  contact: /cap_contact
+  seal: /vacuum_seal

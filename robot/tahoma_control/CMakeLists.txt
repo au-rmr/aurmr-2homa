@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.8)
+project(tahoma_control)
+set(CMAKE_CXX_STANDARD 17)
+add_compile_options(-Wall -Wextra -Wpedantic)
+find_package(ament_cmake REQUIRED)
+find_package(bondcpp REQUIRED)
+find_package(control_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(tahoma_interfaces REQUIRED)
+add_executable(motion_server src/motion_server.cpp)
+target_link_libraries(motion_server
+  bondcpp::bondcpp rclcpp::rclcpp rclcpp_action::rclcpp_action
+  ${control_msgs_TARGETS} ${geometry_msgs_TARGETS} ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS} ${tahoma_interfaces_TARGETS})
+install(TARGETS motion_server DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
+ament_package()

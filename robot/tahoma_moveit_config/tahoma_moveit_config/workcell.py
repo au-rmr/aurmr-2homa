@@ -27,6 +27,57 @@ def _walls(name, limit):
     }
 
 
+def _bins(name, spec):
+    """A pod face's fabric bins as boxes: one plate per shelf level, a full-height divider
+    between columns, the back, and the lip (flap) at the front of each bin's floor.
+
+    In the pod frame: x across the face from column 1, y into the pod (0 = the face), z up.
+    spec: frame, origin (front bottom left corner of the bottom left bin), columns, bin_width,
+    depth, row_heights (bottom row first, rows named a, b, c...), flap_height, min_wall.
+    The real fabric is 2 to 7 mm. Walls are modelled at least min_wall thick, centred on the
+    real wall, because straight moves are checked only at their waypoints (5 mm apart), so a
+    thinner wall could fall between two of them.
+    """
+    x0, y0, z0 = spec["origin"]
+    t = spec["min_wall"]
+    width = spec["columns"] * spec["bin_width"]
+    depth = spec["depth"]
+    levels = [z0]
+    for h in spec["row_heights"]:
+        levels.append(levels[-1] + h)
+    height = levels[-1] - z0
+    frame = spec["frame"]
+    out = {}
+    for i, z in enumerate(levels):
+        out[f"{name}_shelf_{i}"] = {"frame": frame, "xyz": [x0 + width / 2, y0 + depth / 2, z],
+                                    "size": [width, depth, t]}
+    for j in range(spec["columns"] + 1):
+        x = x0 + j * spec["bin_width"]
+        out[f"{name}_divider_{j}"] = {"frame": frame, "xyz": [x, y0 + depth / 2, z0 + height / 2],
+                                      "size": [t, depth, height]}
+    out[f"{name}_back"] = {"frame": frame, "xyz": [x0 + width / 2, y0 + depth, z0 + height / 2],
+                           "size": [width, t, height]}
+    flap = spec["flap_height"]
+    for i, z in enumerate(levels[:-1]):
+        row = "abcdefghijklmnopqrstuvwxyz"[i]
+        out[f"{name}_flap_{row}"] = {"frame": frame, "xyz": [x0 + width / 2, y0, z + flap / 2],
+                                     "size": [width, t, flap]}
+    return out
+
+
+def bin_box(workcell, pod, bin_id):
+    """Inner corners of bin bin_id (e.g. "2h": column 2, row h) in the pod frame:
+    ((x_min, y_min, z_min), (x_max, y_max, z_max)), the real fabric, not the inflated walls."""
+    spec = workcell["pods"][pod]
+    col, row = int(bin_id[:-1]), "abcdefghijklmnopqrstuvwxyz".index(bin_id[-1].lower())
+    if not 1 <= col <= spec["columns"] or row >= len(spec["row_heights"]):
+        raise KeyError(f"no bin {bin_id} in {pod}")
+    x0, y0, z0 = spec["origin"]
+    z = z0 + sum(spec["row_heights"][:row])
+    x = x0 + (col - 1) * spec["bin_width"]
+    return ((x, y0, z), (x + spec["bin_width"], y0 + spec["depth"], z + spec["row_heights"][row]))
+
+
 def load(path):
     with open(path) as f:
         workcell = yaml.safe_load(f)
@@ -34,6 +85,10 @@ def load(path):
         walls = _walls(name, limit)
         workcell["objects"].update(walls)
         workcell["scenes"][name] = list(walls)
+    for name, spec in workcell.get("pods", {}).items():
+        boxes = _bins(name, spec)
+        workcell["objects"].update(boxes)
+        workcell["scenes"][name] = list(boxes)
     return workcell
 
 

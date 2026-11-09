@@ -1,2 +1,2 @@
 coupling.stl, connector_cover.stl: from robotiq_2f_85_gripper_visualization (ros-industrial/robotiq).
-Check that package's licence when the licence for this repo is decided.
+BSD licence, kept in LICENSE.robotiq. Everything else in this repo is MIT unless a file says otherwise.

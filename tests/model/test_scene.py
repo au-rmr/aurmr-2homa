@@ -17,7 +17,7 @@ ARM = [f"arm_{n}_joint" for n in
        ("shoulder_pan", "shoulder_lift", "elbow", "wrist_1", "wrist_2", "wrist_3")]
 # As used by the old demos: table in the down position with each pod scene.
 SCENES = [[], ["table_down"], ["limits_full"], ["limits_drop_hide"], ["pod_partial"],
-          ["table_down", "limits_full"], ["table_down", "limits_drop_hide"]]
+          ["pod_bins"], ["table_down", "limits_full"], ["table_down", "limits_drop_hide"]]
 TOOL_LINKS = {"coupling", "capacitive_cup"}
 SEARCH = 3000
 
@@ -90,7 +90,7 @@ def collisions(ps, model, seed=0):
     return [q for q in qs if ps.is_state_colliding(state(model, q), GROUP)]
 
 
-@pytest.mark.parametrize("names", [["table_down"], ["limits_full"], ["pod_partial"]],
+@pytest.mark.parametrize("names", [["table_down"], ["limits_full"], ["pod_partial"], ["pod_bins"]],
                          ids=lambda n: n[0])
 def test_scene_object_blocks_poses(model, wc, names):
     """Control: without this, an all-clear above could mean nothing was checked."""
@@ -148,3 +148,36 @@ def test_tool_only_adjacent_exceptions():
     for e in root.iter("disable_collisions"):
         if {e.get("link1"), e.get("link2")} & TOOL_LINKS:
             assert e.get("reason") == "Adjacent", (e.get("link1"), e.get("link2"))
+
+
+def _extent(spec):
+    c, h = np.array(spec["xyz"]), np.array(spec["size"]) / 2
+    return c - h, c + h
+
+
+def test_pod_bins_leave_each_bin_open(wc):
+    """Every bin's inside, less half a modelled wall on each side, is free of the bin boxes:
+    bin_box and the generated walls agree. The front lip sits inside that margin."""
+    spec = wc["pods"]["pod_bins"]
+    boxes = [_extent(wc["objects"][n]) for n in wc["scenes"]["pod_bins"]]
+    margin = spec["min_wall"] / 2 + 1e-9
+    rows = "abcdefghijklmnopqrstuvwxyz"[:len(spec["row_heights"])]
+    for col in range(1, spec["columns"] + 1):
+        for row in rows:
+            lo, hi = (np.array(v) for v in W.bin_box(wc, "pod_bins", f"{col}{row}"))
+            lo, hi = lo + margin, hi - margin
+            hits = [n for n, (blo, bhi) in zip(wc["scenes"]["pod_bins"], boxes)
+                    if np.all(blo < hi) and np.all(bhi > lo)]
+            assert hits == [], f"bin {col}{row} blocked by {hits}"
+
+
+def test_bin_2h_where_the_demo_works(wc):
+    """The demo's bin, in base_link: about 0.23 m wide, its face near the measured pod face."""
+    lo, hi = W.bin_box(wc, "pod_bins", "2h")
+    corners = [(lo[0], lo[1], lo[2]), (hi[0], lo[1], lo[2]), (lo[0], lo[1], hi[2])]
+    T = W._matrix(wc["frames"]["pod_base_link"]["xyz"], wc["frames"]["pod_base_link"]["rpy"])
+    base = [(T @ np.r_[c, 1])[:3] for c in corners]
+    face_x = wc["limits"]["limits_full"]["x_max"]
+    assert all(abs(p[0] - face_x) < 0.04 for p in base)
+    assert np.linalg.norm(base[0] - base[1]) == pytest.approx(0.234, abs=1e-6)
+    assert 1.4 < base[0][2] < 1.6

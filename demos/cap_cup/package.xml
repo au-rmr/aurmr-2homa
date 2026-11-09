@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>cap_cup_demo</name>
+  <version>0.1.0</version>
+  <description>The capacitive cup demo: approach a bin, find the item by touch, pick it.</description>
+  <maintainer email="choialex@uw.edu">Alex Choi</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <exec_depend>aurmr_skills</exec_depend>
+  <exec_depend>capcup_driver</exec_depend>
+  <exec_depend>tahoma_robot</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

@@ -1,0 +1,3 @@
+# Python packages not in apt, pinned. Installed into the image by the Dockerfile.
+# Vacuum ejector (EtherNet/IP). 1.2.16 is the version Phase 2 ran against the lab's ejector.
+pycomm3==1.2.16

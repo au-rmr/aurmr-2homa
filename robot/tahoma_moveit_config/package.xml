@@ -4,11 +4,14 @@
   <version>0.1.0</version>
   <description>MoveIt settings for the workcell. Tool and site data are passed in.</description>
   <maintainer email="choialex@uw.edu">Alex Choi</maintainer>
-  <license>TBD</license>
+  <license>MIT</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <exec_depend>tahoma_control</exec_depend>
   <exec_depend>tahoma_description</exec_depend>
   <exec_depend>moveit_ros_move_group</exec_depend>
   <exec_depend>rviz2</exec_depend>
+  <exec_depend>ur_robot_driver</exec_depend>
+  <exec_depend>ur_controllers</exec_depend>
   <export><build_type>ament_cmake</build_type></export>
 </package>

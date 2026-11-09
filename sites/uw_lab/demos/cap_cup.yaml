@@ -1,0 +1,19 @@
+# cap_cup demo at the UW lab. Values from the old ROS 1 hard_code_pose script.
+scene_hide: [limits_drop_hide, table_down, pod_partial]
+scene_work: [limits_full, table_down, pod_partial, pod_bins]
+# Inside the bin: the pod-face wall (limits_full_x_max) is off, the side walls stay, and the
+# bins are modelled. The old demo checked nothing on these moves.
+scene_bin: [limits_full_y_min, limits_full_y_max, table_down, pod_partial, pod_bins]
+pod_face_limit: limits_full
+# Bin 2H, the old default_pose. It was given for arm_tool0, the old planning tip.
+approach_link: arm_tool0
+approach_xyz: [0.730, 0.035, 1.580]
+approach_quat: [0.7071067811865475, -5.551115123125783e-17, 0.7071067811865475, 1.6653345369377348e-16]
+approach_m: 0.05          # old MOVE_FORWARD
+touch_force_n: 15.0       # backup force stop while touching; the old demo had none here
+search_timeout_s: 20.0    # old CheckCapAlignment timeout
+clearance_m: 0.005        # old RETRACT_FOR_CLEARANCE and GetHapticSearchPose clearance
+lift_m: 0.03              # old LIFT_OBJ, in base_link
+retreat_clear_m: 0.05     # back out until the tool tip is 5 cm in front of the pod-face wall (old CLEAR_WALL: 20 cm)
+straight_speed: 0.01      # m/s
+planned_speed: 0.2

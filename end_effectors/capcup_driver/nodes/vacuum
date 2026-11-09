@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Vacuum ejector: service ~/set (OFF, SUCK, BLOW), and at rate_hz publishes
+/vacuum/system_vacuum_mbar and /vacuum_seal (vacuum above seal_mbar).
+
+A failed reading publishes nothing, so a motion that stops on seal sees the signal go stale
+instead of a false 'no seal'. The old driver published 0 on a bad read.
+Runs on the host the ejector is wired to. Parameters: ip, rate_hz, seal_mbar, fake, fake_item_topic.
+"""
+import threading
+
+import rclpy
+from capcup_interfaces.srv import SetVacuum
+from rclpy.qos import qos_profile_sensor_data
+from std_msgs.msg import Bool, Float32
+
+from capcup_driver.ejector import Ejector
+
+
+def main():
+    rclpy.init()
+    node = rclpy.create_node("vacuum")
+    ip = node.declare_parameter("ip", "").value
+    rate = node.declare_parameter("rate_hz", 50.0).value
+    seal_mbar = node.declare_parameter("seal_mbar", 750.0).value
+    fake = node.declare_parameter("fake", False).value
+    # Tests only: with a fake ejector, whether an item is under the cup follows this Bool topic.
+    fake_item_topic = node.declare_parameter("fake_item_topic", "").value
+    if fake:
+        from capcup_driver.fake import FakeCIP
+        cip = FakeCIP(item_present=not fake_item_topic)
+        ejector = Ejector("fake", driver_factory=lambda _: cip)
+        if fake_item_topic:
+            def on_item(m):
+                cip.item_present = m.data
+            node.create_subscription(Bool, fake_item_topic, on_item, 10)
+    else:
+        if not ip:
+            raise SystemExit("vacuum: parameter ip is required")
+        ejector = Ejector(ip)
+    lock = threading.Lock()
+    level_pub = node.create_publisher(Float32, "/vacuum/system_vacuum_mbar", qos_profile_sensor_data)
+    seal_pub = node.create_publisher(Bool, "/vacuum_seal", qos_profile_sensor_data)
+    failures = [0]
+
+    def poll():
+        try:
+            with lock:
+                mbar = ejector.system_vacuum_mbar()
+        except (ConnectionError, OSError) as e:
+            failures[0] += 1
+            if failures[0] in (1, 10, 100) or failures[0] % 1000 == 0:
+                node.get_logger().error(f"vacuum reading failed ({failures[0]} so far): {e}")
+            return
+        level_pub.publish(Float32(data=float(mbar)))
+        seal_pub.publish(Bool(data=mbar > seal_mbar))
+
+    def on_set(request, response):
+        if request.mode not in (SetVacuum.Request.OFF, SetVacuum.Request.SUCK,
+                                SetVacuum.Request.BLOW):
+            response.success, response.message = False, f"unknown mode {request.mode}"
+            return response
+        try:
+            with lock:
+                ejector.set_mode(request.mode)
+            response.success = True
+        except (ConnectionError, OSError) as e:
+            response.success, response.message = False, str(e)
+        return response
+
+    node.create_service(SetVacuum, "~/set", on_set)
+    node.create_timer(1.0 / rate, poll)
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+    ejector.close()
+
+
+if __name__ == "__main__":
+    main()

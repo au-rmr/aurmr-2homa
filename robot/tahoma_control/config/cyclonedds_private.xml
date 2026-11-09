@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The control host's private domain: the UR driver, the controllers and motion_server's
+     hardware side. Loopback only, no multicast, peers on this host only: no other host can see
+     it, whatever domain it picks. The id must match robot.launch.py's private_domain. -->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="${AURMR_PRIVATE_DOMAIN:-142}">
+    <General>
+      <Interfaces>
+        <NetworkInterface name="lo" priority="default" multicast="false"/>
+      </Interfaces>
+      <AllowMulticast>false</AllowMulticast>
+    </General>
+    <Discovery>
+      <Peers><Peer address="127.0.0.1"/></Peers>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>100</MaxAutoParticipantIndex>
+    </Discovery>
+    <Internal>
+      <SocketReceiveBufferSize min="2MB"/>
+    </Internal>
+  </Domain>
+</CycloneDDS>
