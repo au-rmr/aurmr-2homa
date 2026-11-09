@@ -1,32 +1,34 @@
-# Velocities as in the old stack. Accelerations are placeholders for mock: docs/deferred.md
+# Velocities as in the old stack (= ur_description's UR16e limits).
+# Accelerations 5.0 rad/s^2: UR's own ur_moveit_config/config/joint_limits.yaml ("chosen conservatively",
+# needed for time parameterization). ur_description leaves them off. Moves scale them further.
 joint_limits:
   arm_shoulder_pan_joint:
     has_velocity_limits: true
     max_velocity: 2.0943951023931953
     has_acceleration_limits: true
-    max_acceleration: 1.0
+    max_acceleration: 5.0
   arm_shoulder_lift_joint:
     has_velocity_limits: true
     max_velocity: 2.0943951023931953
     has_acceleration_limits: true
-    max_acceleration: 1.0
+    max_acceleration: 5.0
   arm_elbow_joint:
     has_velocity_limits: true
     max_velocity: 3.141592653589793
     has_acceleration_limits: true
-    max_acceleration: 1.0
+    max_acceleration: 5.0
   arm_wrist_1_joint:
     has_velocity_limits: true
     max_velocity: 3.141592653589793
     has_acceleration_limits: true
-    max_acceleration: 1.0
+    max_acceleration: 5.0
   arm_wrist_2_joint:
     has_velocity_limits: true
     max_velocity: 3.141592653589793
     has_acceleration_limits: true
-    max_acceleration: 1.0
+    max_acceleration: 5.0
   arm_wrist_3_joint:
     has_velocity_limits: true
     max_velocity: 3.141592653589793
     has_acceleration_limits: true
-    max_acceleration: 1.0
+    max_acceleration: 5.0
