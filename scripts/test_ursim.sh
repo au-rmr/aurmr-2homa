@@ -7,7 +7,7 @@
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 SITE=${AURMR_SITE:-uw_lab}
-URSIM_VERSION=${URSIM_VERSION:-5.23.0}
+URSIM_VERSION=${URSIM_VERSION:-5.11.11}   # nearest published to the lab arm's 5.11.6; 5.23.0 also works
 ID=$$
 NET=aurmr-ursim-$ID; SIM=aurmr-ursim-sim-$ID; STACK=aurmr-ursim-stack-$ID
 SUBNET=${URSIM_SUBNET:-172.31.56}

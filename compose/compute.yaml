@@ -4,6 +4,10 @@ x-ros: &ros
   image: ghcr.io/au-rmr/aurmr-2homa/base:dev
   build: {context: .., dockerfile: docker/base/Dockerfile}
   network_mode: host
+  # ros2 launch shuts its nodes down in stages (SIGINT, then SIGTERM after a wait), which ran past
+  # Docker's default 10 s and ended in SIGKILL at S4. SIGINT is what launch expects.
+  stop_signal: SIGINT
+  stop_grace_period: 30s
   ipc: host
   env_file: ["../sites/${AURMR_SITE:-uw_lab}/hosts/${AURMR_HOST:?set AURMR_HOST}/ros.env"]
 

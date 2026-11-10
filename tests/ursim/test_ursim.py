@@ -202,18 +202,16 @@ def test_7_killed_demo_stops_the_arm(stack):
 
 
 def test_9_payload_step(stack):
+    """On PolyScope 5.11 setting the payload from software stops the program, so the step refuses
+    and says to use the tablet; the program keeps running."""
     script = os.path.join(HERE, "..", "arm", "s4_steps.py")
-    refused = subprocess.run([sys.executable, script, "payload", "--mass", "20"],
-                             capture_output=True, text=True, timeout=60)
-    assert refused.returncode != 0 and "implausible" in refused.stderr
-    from_yaml = subprocess.run([sys.executable, script, "payload"], capture_output=True,
-                               text=True, timeout=60)
-    print(from_yaml.stdout, from_yaml.stderr[-500:])
-    assert from_yaml.returncode == 0 and "RESULT payload 0.205 kg" in from_yaml.stdout
-    done = subprocess.run([sys.executable, script, "payload", "--mass", "1.2", "--cog", "0", "0",
-                           "0.1"], capture_output=True, text=True, timeout=60)
-    print(done.stdout, done.stderr[-500:])
-    assert done.returncode == 0 and "RESULT payload 1.2 kg" in done.stdout
+    env = {k: v for k, v in os.environ.items() if k != "AURMR_PAYLOAD_FROM_SOFTWARE"}
+    refused = subprocess.run([sys.executable, script, "payload"], capture_output=True, text=True,
+                             timeout=60, env=env)
+    assert refused.returncode != 0 and "set it on the tablet" in refused.stderr
+    check = subprocess.run([sys.executable, script, "wrist"], capture_output=True, text=True,
+                           timeout=120)
+    assert check.returncode == 0 and check.stdout.count("RESULT done") == 2, check.stderr[-2000:]
 
 
 @pytest.mark.parametrize("step", ["check", "wrist", "named", "straight", "force_stop", "stop"])
@@ -229,6 +227,7 @@ def test_8_s4_steps_rehearsal(stack, step):
         assert done.stdout.count("RESULT done") >= 1
     if step == "force_stop":
         assert "reason done" in done.stdout   # nobody presses in the simulator
+        assert "RESULT return done" in done.stdout
     if step == "stop":
         assert "reason stopped" in done.stdout
     time.sleep(1.0)

@@ -56,18 +56,32 @@ def rates(seconds=5.0):
     node.destroy_node()
 
 
-def watch_stop(robot):
-    """How far and how long the arm kept moving after a stop."""
-    start, t0 = robot.joints(), time.monotonic()
-    last, last_change = start, t0
-    while time.monotonic() - t0 < 1.5:
+SETTLED_RAD = 2e-4   # within this of the final position counts as stopped (real encoders jitter)
+
+
+def watch_stop(robot, seconds=1.5):
+    """How far and how long the arm kept moving, timed from the move's result (not the stop request).
+
+    Settled = every joint within SETTLED_RAD of where it ends up, so encoder jitter around the end
+    point doesn't keep the clock running. Also returns the largest jitter seen once settled.
+    """
+    t0 = time.monotonic()
+    samples = [(0.0, robot.joints())]
+    while time.monotonic() - t0 < seconds:
         time.sleep(0.005)
-        now = robot.joints()
-        if max(abs(now[k] - last[k]) for k in now) > 1e-5:
-            last_change = time.monotonic()
-        last = now
-    far = max(abs(last[k] - start[k]) for k in start)
-    return far, last_change - t0
+        samples.append((time.monotonic() - t0, robot.joints()))
+    final = samples[-1][1]
+    off = [(t, max(abs(q[k] - final[k]) for k in final)) for t, q in samples]
+    moving = [t for t, d in off if d > SETTLED_RAD]
+    took = moving[-1] if moving else 0.0
+    jitter = max((d for t, d in off if t > took), default=0.0)
+    far = max(abs(final[k] - samples[0][1][k]) for k in final)
+    return far, took, jitter
+
+
+def stop_line(far, took, jitter):
+    return (f"kept moving {far:.5f} rad, settled {took:.3f} s after the result "
+            f"(jitter after {jitter:.5f} rad)")
 
 
 def set_payload(args):
@@ -119,6 +133,13 @@ def step(args):
         rates(10.0)
         return
     if s == "payload":
+        if os.environ.get("AURMR_PAYLOAD_FROM_SOFTWARE") != "1":
+            # ur_robot_driver 3.9.0 sends set_target_payload with 4 arguments; PolyScope 5.11
+            # (the lab arm, and URSim 5.11.11) takes 3, and the script error stops External
+            # Control. docs/deferred.md. Opt in only on a PolyScope known to accept it.
+            sys.exit("payload: set it on the tablet (Installation, General, Payload), from "
+                     "tool.yaml. Setting it from software stops the program on PolyScope 5.11. "
+                     "AURMR_PAYLOAD_FROM_SOFTWARE=1 to try it anyway.")
         set_payload(args)
         return
     with Robot.connect("capcup", LIMIT_N, WORKCELL) as robot:
@@ -138,27 +159,29 @@ def step(args):
             print(f"RESULT {robot.move_straight((0, 0, 0.02), speed=0.01).reason}")
             print(f"RESULT {robot.move_straight((0, 0, -0.02), speed=0.01).reason}")
         elif s == "force_stop":
-            announce("tool moves 5 cm at 0.01 m/s; press it with a soft object, it must stop "
-                     "at 10 N, then it moves back 1 cm: let go after the stop")
+            announce("tool moves 5 cm at 0.01 m/s; press the tip back with something stiff, it "
+                     "must stop at 10 N; let go when it stops: 3 s later it moves back 1 cm")
             r = robot.move_straight((0, 0, 0.05), speed=0.01, stop=Stop(force_n=10))
-            far, took = watch_stop(robot)
-            print(f"RESULT reason {r.reason}, peak {r.peak_force_n:.1f} N, kept moving "
-                  f"{far:.5f} rad for {took:.3f} s")
-            robot.move_straight((0, 0, -0.01), speed=0.01)
+            print(f"RESULT reason {r.reason}, peak {r.peak_force_n:.1f} N, "
+                  f"{stop_line(*watch_stop(robot))}")
+            # The return starts with the person's push as its zero: give them time to let go, and
+            # stop it on force too, so it can't press into a hand that is still there.
+            print("LET GO NOW: moving back 1 cm in 3 s", flush=True)
+            time.sleep(3.0)
+            back = robot.move_straight((0, 0, -0.01), speed=0.01, stop=Stop(force_n=10))
+            print(f"RESULT return {back.reason}, peak {back.peak_force_n:.1f} N")
         elif s == "limit":
             announce(f"tool moves 5 cm at 0.01 m/s; press past {LIMIT_N} N: it must raise")
             try:
                 r = robot.move_straight((0, 0, 0.05), speed=0.01)
                 print(f"RESULT no limit reached: reason {r.reason}, peak {r.peak_force_n:.1f} N")
             except ForceLimitExceeded as e:
-                far, took = watch_stop(robot)
-                print(f"RESULT ForceLimitExceeded ({e}), kept moving {far:.5f} rad for {took:.3f} s")
+                print(f"RESULT ForceLimitExceeded ({e}), {stop_line(*watch_stop(robot))}")
         elif s == "stop":
             announce("tool moves 5 cm at 0.02 m/s and is stopped by software after 1 s")
             threading.Timer(1.0, robot.stop).start()
             r = robot.move_straight((0, 0, 0.05), speed=0.02)
-            far, took = watch_stop(robot)
-            print(f"RESULT reason {r.reason}, kept moving {far:.5f} rad for {took:.3f} s")
+            print(f"RESULT reason {r.reason}, {stop_line(*watch_stop(robot))}")
         else:
             sys.exit(f"unknown step {s}")
 
