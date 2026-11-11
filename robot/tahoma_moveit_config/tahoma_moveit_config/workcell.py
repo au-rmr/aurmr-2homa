@@ -65,6 +65,30 @@ def _bins(name, spec):
     return out
 
 
+def _soft_bin(name, spec, col, row):
+    """One bin for moves inside it: its canvas is flexible (user 2026-11-10), so its floor, top,
+    sides and back sit spec["canvas_allowance"] beyond the real fabric, and the lip is left out.
+    Other bins are beyond these walls and left out too. Rigid pod parts are separate objects."""
+    a, t = spec["canvas_allowance"], spec["min_wall"]
+    (x0, y0, z0), (x1, y1, z1) = _bin_box(spec, col, row)
+    x0, x1, z0, z1, y1 = x0 - a, x1 + a, z0 - a, z1 + a, y1 + a
+    cx, cz, w, h = (x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0
+    d = y1 - y0
+    f = spec["frame"]
+    return {f"{name}_soft_{col}{row}_floor": {"frame": f, "xyz": [cx, y0 + d / 2, z0 - t / 2], "size": [w, d, t]},
+            f"{name}_soft_{col}{row}_top": {"frame": f, "xyz": [cx, y0 + d / 2, z1 + t / 2], "size": [w, d, t]},
+            f"{name}_soft_{col}{row}_left": {"frame": f, "xyz": [x0 - t / 2, y0 + d / 2, cz], "size": [t, d, h]},
+            f"{name}_soft_{col}{row}_right": {"frame": f, "xyz": [x1 + t / 2, y0 + d / 2, cz], "size": [t, d, h]},
+            f"{name}_soft_{col}{row}_back": {"frame": f, "xyz": [cx, y1 + t / 2, cz], "size": [w, t, h]}}
+
+
+def _bin_box(spec, col, row):
+    x0, y0, z0 = spec["origin"]
+    z = z0 + sum(spec["row_heights"][:row])
+    x = x0 + (col - 1) * spec["bin_width"]
+    return ((x, y0, z), (x + spec["bin_width"], y0 + spec["depth"], z + spec["row_heights"][row]))
+
+
 def bin_box(workcell, pod, bin_id):
     """Inner corners of bin bin_id (e.g. "2h": column 2, row h) in the pod frame:
     ((x_min, y_min, z_min), (x_max, y_max, z_max)), the real fabric, not the inflated walls."""
@@ -72,10 +96,7 @@ def bin_box(workcell, pod, bin_id):
     col, row = int(bin_id[:-1]), "abcdefghijklmnopqrstuvwxyz".index(bin_id[-1].lower())
     if not 1 <= col <= spec["columns"] or row >= len(spec["row_heights"]):
         raise KeyError(f"no bin {bin_id} in {pod}")
-    x0, y0, z0 = spec["origin"]
-    z = z0 + sum(spec["row_heights"][:row])
-    x = x0 + (col - 1) * spec["bin_width"]
-    return ((x, y0, z), (x + spec["bin_width"], y0 + spec["depth"], z + spec["row_heights"][row]))
+    return _bin_box(spec, col, row)
 
 
 def load(path):
@@ -89,6 +110,12 @@ def load(path):
         boxes = _bins(name, spec)
         workcell["objects"].update(boxes)
         workcell["scenes"][name] = list(boxes)
+        if "canvas_allowance" in spec:   # scenes <pod>_soft_<bin>, e.g. pod_bins_soft_2h
+            for col in range(1, spec["columns"] + 1):
+                for row in range(len(spec["row_heights"])):
+                    soft = _soft_bin(name, spec, col, row)
+                    workcell["objects"].update(soft)
+                    workcell["scenes"][f"{name}_soft_{col}{'abcdefghijklmnopqrstuvwxyz'[row]}"] = list(soft)
     return workcell
 
 

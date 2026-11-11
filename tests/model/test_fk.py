@@ -7,8 +7,9 @@ import numpy as np
 import pytest
 
 ARM = ["shoulder_pan", "shoulder_lift", "elbow", "wrist_1", "wrist_2", "wrist_3"]
+# gripper_equilibrium_grasp left out: the cup was re-measured 2026-11-10 (old model = older hardware).
 FRAMES = ["arm_base_link", "arm_tool0", "coupling", "capacitive_cup",
-          "gripper_equilibrium_grasp", "camera_lower_left_mount", "camera_lower_right_mount"]
+          "camera_lower_left_mount", "camera_lower_right_mount"]
 POS_TOL = 1e-4
 ROT_TOL = 1e-3
 # Newer ur_description lowers wrist effort limits from 56 to 54 Nm. Nothing plans on these.

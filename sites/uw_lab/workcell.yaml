@@ -1,7 +1,9 @@
 # Workcell data for this site. Robot code reads this; it holds no numbers of its own.
 frames:
   # from pod_location_calibration. rpy = roll, pitch, yaw (old tf args were yaw pitch roll)
-  pod_base_link: {parent: base_link, xyz: [1.017, 0.385, -0.028], rpy: [0.041, 0.002, -1.537]}
+  # Pod calibration by touch 2026-11-10 (docs/procedures/pod_calibration.md, --floor, 930 mm width and 30 mm uprights by tape).
+  # Old (ROS 1 hand-set, until 2026-11-10): xyz [1.017, 0.385, -0.028], rpy [0.041, 0.002, -1.537]
+  pod_base_link: {parent: base_link, xyz: [0.964, 0.371, 0.000], rpy: [0.0129, 0.0000, -1.5548]}
 
 # Keep-out limits, in base_link (z = 0 is the floor). Inner faces of vertical walls.
 # Not physical objects: they keep planning inside the cell.
@@ -16,29 +18,38 @@ objects:
   # Thickness is assumed. table_up is not measured yet: docs/deferred.md
   table_down: {frame: base_link, xyz: [0.515, -0.165, 0.70], size: [0.61, 1.52, 0.05]}
   # Carried from aurmr_tasks planning_scene.py. These follow the pod frame, so they inherit
-  # its calibrated 2.35 degree tilt: docs/deferred.md
-  pod_col_01: {frame: pod_base_link, xyz: [0.0, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
-  pod_col_05: {frame: pod_base_link, xyz: [0.9398, 0.4699, 1.45], size: [0.033, 0.9398, 2.3]}
+  # its calibration (by touch 2026-11-10; was a false 2.35 degree tilt).
+  # Uprights: L-channel, both legs ~30 mm (user 2026-11-10); a 30 x 30 post at the front covers the L, floor to the pod top ~2.55 m. Were 0.033 x 0.94, z 0.3-2.6.
+  pod_col_01: {frame: pod_base_link, xyz: [0.0, 0.015, 1.275], size: [0.030, 0.030, 2.55]}
+  pod_col_05: {frame: pod_base_link, xyz: [0.900, 0.015, 1.275], size: [0.030, 0.030, 2.55]}  # x by tape 2026-11-10 (930 mm outer width); was 0.9398
+  # Top strut, rigid: 30 mm under the pod top (~2.55 m), across the face (user 2026-11-10).
+  pod_top_strut: {frame: pod_base_link, xyz: [0.450, 0.015, 2.535], size: [0.930, 0.030, 0.030]}
   back_frame: {frame: base_link, xyz: [-0.28, 0, 1.27], rpy: [0, 0, 1.5707963], size: [1.45, 0.2, 1.5]}
 
 # The pod's fabric bins, generated into a scene of the same name (tahoma_moveit_config.workcell).
 # Pod 1 face A, from the old tahoma_description pod.xacro (pod1_recipe_790-00265-021,
 # "corresponds to reality"): origin = BRACE_TO_FABRIC_XY_OFFSET 0.004 and
 # BASE_HEIGHT 0.265 + BRACE_TO_FABRIC_Z_OFFSET 0.085. Follows pod_base_link, so it inherits the
-# calibration's tilt (docs/deferred.md): recalibrate before relying on it.
+# calibration. 2026-11-10: x, width, depth, rows and flaps re-measured on the real pod (it is not the pod.xacro pod).
 pods:
   pod_bins:
     frame: pod_base_link
-    origin: [0.004, 0.004, 0.350]
+    origin: [-0.015, 0.004, 0.305]   # x: outer side of the left upright; z: lowest bin floor, +-1 cm (2026-11-10, was [0.004, 0.004, 0.350])
     columns: 4
-    bin_width: 0.234
-    depth: 0.152
-    row_heights: [0.234, 0.166, 0.173, 0.146, 0.187, 0.160, 0.116, 0.223, 0.146, 0.223, 0.146, 0.261]
-    flap_height: 0.032
+    bin_width: 0.2325   # 930 mm outer width / 4 (user 2026-11-10, was 0.234)
+    depth: 0.150        # user 2026-11-10 (was 0.152)
+    # From dividers above the floor (user 2026-11-10, meter stick, cm): 30.5 52.5 67.5 89.5 104.5 124.5 139.5
+    # 151.5 174.5 189.5 211.5 226.5, top 252 (30 mm under the top strut, pod ~2.55 m).
+    # Was [0.234, 0.166, 0.173, 0.146, 0.187, 0.160, 0.116, 0.223, 0.146, 0.223, 0.146, 0.261] from 0.350.
+    row_heights: [0.220, 0.150, 0.220, 0.150, 0.200, 0.150, 0.120, 0.230, 0.150, 0.220, 0.150, 0.255]
+    flap_height: 0.035   # user 2026-11-10 (was 0.032)
     min_wall: 0.01
+    # Canvas is flexible (user 2026-11-10: the old testing pushed the lips and walls a bit).
+    # Scenes pod_bins_soft_<bin> (e.g. pod_bins_soft_2h): that bin's walls this far out, no lip.
+    canvas_allowance: 0.02
 
 scenes:
-  pod_partial: [pod_col_01, pod_col_05, back_frame]
+  pod_partial: [pod_col_01, pod_col_05, pod_top_strut, back_frame]   # the pod's rigid parts + the robot's frame
 
 # Joint order: shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3
 named_poses:

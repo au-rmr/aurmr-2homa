@@ -1,9 +1,10 @@
 # cap_cup demo at the UW lab. Values from the old ROS 1 hard_code_pose script.
 scene_hide: [limits_drop_hide, table_down, pod_partial]
 scene_work: [limits_full, table_down, pod_partial, pod_bins]
-# Inside the bin: the pod-face wall (limits_full_x_max) is off, the side walls stay, and the
-# bins are modelled. The old demo checked nothing on these moves.
-scene_bin: [limits_full_y_min, limits_full_y_max, table_down, pod_partial, pod_bins]
+# Inside the bin: the pod-face wall (limits_full_x_max) is off, the side walls stay, the rigid
+# pod parts are true size, and bin 2H's canvas may be pushed 2 cm (pod_bins_soft_2h, no lip;
+# user 2026-11-10). The old demo checked nothing on these moves.
+scene_bin: [limits_full_y_min, limits_full_y_max, table_down, pod_partial, pod_bins_soft_2h]
 pod_face_limit: limits_full
 # Bin 2H, the old default_pose. It was given for arm_tool0, the old planning tip.
 approach_link: arm_tool0

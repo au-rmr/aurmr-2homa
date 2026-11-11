@@ -179,5 +179,22 @@ def test_bin_2h_where_the_demo_works(wc):
     base = [(T @ np.r_[c, 1])[:3] for c in corners]
     face_x = wc["limits"]["limits_full"]["x_max"]
     assert all(abs(p[0] - face_x) < 0.04 for p in base)
-    assert np.linalg.norm(base[0] - base[1]) == pytest.approx(0.234, abs=1e-6)
+    assert np.linalg.norm(base[0] - base[1]) == pytest.approx(wc["pods"]["pod_bins"]["bin_width"], abs=1e-6)
     assert 1.4 < base[0][2] < 1.6
+
+
+def test_soft_bin_gives_the_canvas_allowance(wc):
+    """pod_bins_soft_<bin>: the bin's inside plus canvas_allowance on every side (front open, no
+    lip) is free; one more wall's thickness out is blocked on the floor, sides and back."""
+    spec = wc["pods"]["pod_bins"]
+    a, t = spec["canvas_allowance"], spec["min_wall"]
+    for b in ("2h", "1a", "4l"):
+        names = wc["scenes"][f"pod_bins_soft_{b}"]
+        boxes = [_extent(wc["objects"][n]) for n in names]
+        lo, hi = (np.array(v) for v in W.bin_box(wc, "pod_bins", b))
+        free_lo, free_hi = lo - [a, 0, a] + 1e-9, hi + a - 1e-9
+        assert not [n for n, (blo, bhi) in zip(names, boxes) if np.all(blo < free_hi) and np.all(bhi > free_lo)]
+        for probe in ([lo[0] - a - t / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2],
+                      [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, lo[2] - a - t / 2],
+                      [(lo[0] + hi[0]) / 2, hi[1] + a + t / 2, (lo[2] + hi[2]) / 2]):
+            assert any(np.all(blo <= probe) and np.all(bhi >= probe) for blo, bhi in boxes), (b, probe)

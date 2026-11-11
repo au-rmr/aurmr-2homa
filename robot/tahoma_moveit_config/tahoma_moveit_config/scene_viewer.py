@@ -4,6 +4,7 @@ Reads geometry only. Publishes joint states for robot_state_publisher, so never 
 a real robot (scripts/view_scene.sh runs it with no network).
 """
 import argparse
+import copy
 import sys
 
 import rclpy
@@ -39,7 +40,7 @@ def object_markers(wc, names, stamp):
         cube.color.r, cube.color.g, cube.color.b, cube.color.a = color
         label = Marker(ns="labels", id=i, type=Marker.TEXT_VIEW_FACING, action=Marker.ADD)
         label.header = cube.header
-        label.pose = cube.pose
+        label.pose = copy.deepcopy(cube.pose)   # a shared Pose would drag the box down to the label's 1.9 m cap
         label.pose.position.z = min(cube.pose.position.z, 1.9)
         label.scale.z = 0.07
         label.text = name

@@ -26,10 +26,39 @@
       <child link="coupling"/>
       <origin xyz="0 0 0" rpy="0 0 ${1.5 * pi}"/>
     </joint>
+    <!-- Lengths measured by the user 2026-11-10 (the old 0.177 was an earlier hardware iteration):
+         coupling face -> aluminium end 179.5 mm, -> relaxed suction cup tip 187.54 mm. -->
+    <!-- Collision: stacked cylinders that contain the user's CAD mesh (_full_assembly_v2.stl, 2026-11-10;
+         radius = the mesh's largest in each span, rounded up to 0.1 mm). Body 75 mm to 85 mm, loft to the
+         38.1 mm aluminium rod (end at 179.5 mm), suction cup to 187.54 mm. Not in the repo (125 MB). -->
     <link name="capacitive_cup">
       <collision>
-        <origin xyz="0 0 ${.177 / 2}"/>
-        <geometry><cylinder radius=".0375" length=".177"/></geometry>
+        <origin xyz="0 0 0.04250"/>
+        <geometry><cylinder radius="0.0375" length="0.08500"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 0.09250"/>
+        <geometry><cylinder radius="0.0374" length="0.01500"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 0.10750"/>
+        <geometry><cylinder radius="0.0341" length="0.01500"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 0.12250"/>
+        <geometry><cylinder radius="0.0288" length="0.01500"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 0.13750"/>
+        <geometry><cylinder radius="0.0239" length="0.01500"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 0.16250"/>
+        <geometry><cylinder radius="0.0199" length="0.03500"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 0.18377"/>
+        <geometry><cylinder radius="0.0144" length="0.00754"/></geometry>
       </collision>
     </link>
     <joint name="gripper_base" type="fixed">
@@ -41,7 +70,14 @@
     <joint name="capacitive_cup_gripper_equilibrium_grasp" type="fixed">
       <parent link="capacitive_cup"/>
       <child link="gripper_equilibrium_grasp"/>
-      <origin xyz="0 0 0.177"/>
+      <origin xyz="0 0 0.18754"/>
+    </joint>
+    <!-- Rigid end of the cup body (suction cup removed): the probe point for the pod calibration. -->
+    <link name="cup_aluminium_end"/>
+    <joint name="capacitive_cup_aluminium_end" type="fixed">
+      <parent link="capacitive_cup"/>
+      <child link="cup_aluminium_end"/>
+      <origin xyz="0 0 0.1795"/>
     </joint>
   </xacro:macro>
 </robot>
