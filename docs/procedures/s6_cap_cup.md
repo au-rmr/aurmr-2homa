@@ -1,7 +1,8 @@
 # S6: the cap_cup demo on the real robot
 
 After S4 has passed. Each level is its own go-ahead; stop at the first surprise and write it down.
-Same rules as S4: a person at the e-stop for any motion, slider low, results into the S6 ledger with date and commit.
+Same rules as S4: a person at the e-stop for any motion, results into the S6 ledger with date and commit.
+Speed (user 2026-11-12): every move's speed is set in code to be safe with the tablet slider at 100 % (planned moves have a tool tip cap, 0.25 m/s by default; straight moves their own m/s). Set the slider once per session (e.g. 50 % for new code) and only lower it; scripts print each move's real speed at the current slider.
 
 ## What has been checked without the robot
 - `scripts/test_tools.sh`: the capcup math gives the same contact, alignment and pose proposals as the old ROS 1 code on 600 recorded-style samples; the ejector gets the old driver's exact bytes; the search's turn levels a tilted cup (8 to 0.1 degrees, both axes, both signs).
@@ -12,16 +13,25 @@ Not checked, and what this procedure is for: that the electrodes are where the c
 ## Before
 1. `tool.yaml` has the weight and CoG (0.205 kg, 106.7 mm, 2026-11-10), and the same values are set on the tablet (Installation, General, Payload): software payload setting stops the program on PolyScope 5.11 (docs/deferred.md).
 2. Pod calibration: DONE 2026-11-10 (docs/procedures/pod_calibration.md; ledger ~/refresh/phase3/pod_calibration_ledger.md); corner checks at 2G/3G/2H/3H and 3H/4H/3I/4I passed by eye. Inside the bin the demo plans against `pod_bins_soft_2h` (`scene_bin` in `sites/<site>/demos/cap_cup.yaml`): bin 2H's canvas walls 2 cm outside the real fabric and no lip, because the canvas is flexible and the search needs to push it (user); the uprights and top strut are rigid and true size. Watch: canvas resistance against the 10 N / 15 N force stops (a stop on the canvas, not the item, means the allowance or the approach height needs changing); the 2H approach puts the cup about 10 mm over the lip; rows are tape-measured (+-1 cm). Also confirm at a stop: s4_steps' watch_stop settling band (S4 follow-up 2).
-3. On the compute host: `docker compose -f compose/compute.yaml --profile tool up` (cap board bridge, contact detector, haptic search). The cup must be untouched when it starts: the first sample is the zero point.
-4. On the control host: `docker compose -f compose/control.yaml --profile tool up` (ejector), next to the robot service.
+3. On the compute host: `AURMR_HOST=<compute host> docker compose -f compose/compute.yaml --profile tool up` (cap board bridge, contact detector, haptic search). The cup must be untouched when it starts: the first sample is the zero point.
+4. On the control host: `AURMR_HOST=<control host> docker compose -f compose/control.yaml --profile tool up` (ejector), next to the robot service.
+5. Optional, to watch the cup: `DISPLAY=:1 XAUTHORITY=/run/user/$UID/gdm/Xauthority AURMR_HOST=<compute host> docker compose -f compose/compute.yaml --profile dashboard up -d dashboard` (the old ROS 1 dashboard, ported; image docker/dashboard). It zeros on its first samples: start it, or press Re-zero, with the cup in air.
 
 ## L3: tool only, arm idle
 | Step | How | Pass when |
 |---|---|---|
-| 1 | `ros2 topic hz /cap_data` and `/cap_contact` | About 50 Hz each. |
+| 1 | `ros2 topic hz /cap_data` and `/cap_contact` | About 5.8 Hz each (the board's rate, one sample every 0.171 s; measured 2026-11-12). /haptic_search/alignment, /vacuum_seal and /vacuum/system_vacuum_mbar about 50 Hz. |
 | 2 | Press one electrode at a time with a finger, going round the cup | The channel that rises matches the drawing: channel 1 at +22.5 degrees from the tool's x axis, counting towards y. Write down the real order. If it differs, the search turns the wrong way: fix the order in the driver before any motion. |
 | 3 | Press the cup flat on a box by hand | /cap_contact goes true, and /haptic_search/alignment goes true once pressed evenly. |
 | 4 | `ros2 service call /vacuum/set capcup_interfaces/srv/SetVacuum "{mode: 1}"`, cover the cup by hand, then mode 2, then 0 | /vacuum/system_vacuum_mbar rises above 750 when covered and /vacuum_seal goes true; blow-off releases. |
+
+## Calibration on the raised table (2026-11-12)
+Per-channel gains and one deflection curve (`capcup_driver/calibration.py`), from presses on the standing desk raised to ~1 m (`table_up`; lowered it is out of the cup's reach). `tests/arm/cap_press.py`, one go per call:
+1. `start --square --roll 0`: planned, 40 mm above the table along the cup, square to it.
+2. `press --back --out /tmp/cal_A.csv`: in until 8 N, hold 3 s, back out, logged. Repeat as run B.
+3. `start --square --roll 180`, then `press --back --out /tmp/cal_C.csv`.
+4. `docker cp` the CSVs out, then `python3 tests/arm/cap_fit.py A B C --out sites/<site>/tools/capcup_calibration.yaml`.
+Repeats should agree within ~0.03 per gain; a difference between rolls is a tilt fixed in the room, which the fit cancels by averaging rolls. The table's height and tilt came from touching it with the aluminium end (suction cup off, freedrive, `tests/arm/touch_point.py`, 4 points). The search does not use the gains yet.
 
 ## L4: the demo in pieces, item in bin 2H, low speed
 | Step | How | Pass when |

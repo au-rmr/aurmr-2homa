@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+"""CapCup dashboard window (capcup_driver/dashboard.py). Needs a display and python3-pyqtgraph
+(image docker/dashboard)."""
+from capcup_driver.dashboard import main
+
+if __name__ == "__main__":
+    main()

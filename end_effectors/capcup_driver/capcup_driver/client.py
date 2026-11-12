@@ -6,13 +6,17 @@ import threading
 import time
 
 import rclpy
+from capcup_interfaces.msg import CapData
 from capcup_interfaces.srv import SetVacuum
 from geometry_msgs.msg import PoseStamped
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import qos_profile_sensor_data
 from std_msgs.msg import Bool
 
-FRESH_S = 0.2
+# How old a reading may be. contact comes once per cap board sample (every 0.171 s, S6
+# 2026-11-12: the code had assumed 50 Hz and 0.2 s left 29 ms); alignment and seal come at 50 Hz.
+FRESH_S = {"contact": 0.5, "aligned": 0.2, "sealed": 0.2}
+SETTLE_S = 0.05   # after a new cap sample: the 50 Hz search has published from it by then
 
 
 class ToolError(Exception):
@@ -27,12 +31,14 @@ class CapCup:
         self._timeout = timeout_s
         self._latest = {}
         self._proposals = {"turn": None, "move": None}
+        self._sample_stamp = None   # ROS time (s) of the newest cap sample
         self._lock = threading.Lock()
         for name, topic in (("contact", "/cap_contact"), ("aligned", "/haptic_search/alignment"),
                             ("sealed", "/vacuum_seal")):
             qos = 1 if name == "aligned" else qos_profile_sensor_data
             self._node.create_subscription(
                 Bool, topic, lambda m, n=name: self._store(n, m.data), qos)
+        self._node.create_subscription(CapData, "/cap_data", self._on_sample, qos_profile_sensor_data)
         for kind in self._proposals:
             self._node.create_subscription(PoseStamped, f"/haptic_search/proposed_{kind}",
                                            lambda m, k=kind: self._on_proposal(k, m), 1)
@@ -45,15 +51,39 @@ class CapCup:
         with self._lock:
             self._latest[name] = (time.monotonic(), value)
 
-    def _on_proposal(self, kind, msg):
-        p, o = msg.pose.position, msg.pose.orientation
+    def _on_sample(self, msg):
         with self._lock:
-            self._proposals[kind] = (time.monotonic(), (p.x, p.y, p.z), (o.x, o.y, o.z, o.w))
+            self._sample_stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+
+    def _on_proposal(self, kind, msg):
+        # Stamped with the cap sample it was computed from (haptic_search), not when it was sent.
+        p, o = msg.pose.position, msg.pose.orientation
+        made = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        with self._lock:
+            self._proposals[kind] = (made, (p.x, p.y, p.z), (o.x, o.y, o.z, o.w))
+
+    def now(self):
+        """ROS time (s) on this host's clock: what proposals and samples are stamped with. The
+        bridge stamps samples on the compute host, so the demo must run there too."""
+        return self._node.get_clock().now().nanoseconds * 1e-9
+
+    def wait_for_sample(self, after, wait_s=1.0):
+        """Waits for a cap sample taken after `after` (now()), then SETTLE_S so alignment and
+        proposals have been worked out from it. Raises ToolError if none comes."""
+        end = time.monotonic() + wait_s
+        while time.monotonic() < end:
+            with self._lock:
+                got = self._sample_stamp
+            if got is not None and got > after:
+                time.sleep(SETTLE_S)
+                return
+            time.sleep(0.01)
+        raise ToolError(f"no cap sample within {wait_s} s")
 
     def _fresh(self, name):
         with self._lock:
             got = self._latest.get(name)
-        if got is None or time.monotonic() - got[0] > FRESH_S:
+        if got is None or time.monotonic() - got[0] > FRESH_S[name]:
             raise ToolError(f"no recent {name} reading from the capcup")
         return got[1]
 
@@ -78,9 +108,9 @@ class CapCup:
                 time.sleep(0.05)
 
     def proposal(self, kind, newer_than, wait_s=1.0):
-        """The first haptic proposal of this kind ("turn" or "move") made after newer_than
-        (time.monotonic()), as (xyz, quat) in the tool frame, or None if none comes within
-        wait_s. No turn comes while the contact is already level."""
+        """The first haptic proposal of this kind ("turn" or "move") computed from a cap sample
+        taken after newer_than (now()), as (xyz, quat) in the tool frame, or None if none comes
+        within wait_s. No turn comes while the contact is already level."""
         if kind not in self._proposals:
             raise ValueError(f"kind must be turn or move, got {kind}")
         end = time.monotonic() + wait_s

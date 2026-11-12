@@ -57,6 +57,7 @@ struct Signal
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub;
   bool value{false};
   rclcpp::Time stamp{0, 0, RCL_STEADY_TIME};
+  double stale_s{0.1};   // per signal: the capcup board sends contact at 5.8 Hz (S6, 2026-11-12)
 };
 }  // namespace
 
@@ -85,6 +86,8 @@ public:
     overtime_ = declare_parameter("overtime_s", 2.0);
     auto names = declare_parameter("signal_names", std::vector<std::string>{});
     auto topics = declare_parameter("signal_topics", std::vector<std::string>{});
+    // One per signal, or empty for signal_stale_s on all. The tool's tool.yaml sets them.
+    auto stales = declare_parameter("signal_stale_each_s", std::vector<double>{});
     auto controller = declare_parameter(
       "controller_action", std::string("arm_controller/follow_joint_trajectory"));
     // Topic names on the hardware side, as parameters: launch remappings don't reach a second
@@ -95,6 +98,9 @@ public:
     const auto private_domain = declare_parameter("private_domain_id", -1);
     if (names.size() != topics.size()) {
       throw std::runtime_error("signal_names and signal_topics differ in length");
+    }
+    if (!stales.empty() && stales.size() != names.size()) {
+      throw std::runtime_error("signal_stale_each_s must be empty or one per signal");
     }
 
     group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
@@ -146,6 +152,10 @@ public:
     }
     for (size_t i = 0; i < names.size(); ++i) {
       const auto name = names[i];
+      signals_[name].stale_s = stales.empty() ? signal_stale_ : stales[i];
+      if (!(signals_[name].stale_s > 0.0)) {
+        throw std::runtime_error("signal " + name + ": stale limit must be above 0");
+      }
       signals_[name].sub = create_subscription<std_msgs::msg::Bool>(
         topics[i], rclcpp::SensorDataQoS(),
         [this, name](std_msgs::msg::Bool::ConstSharedPtr m) {on_signal(name, m->data);}, options);
@@ -291,7 +301,7 @@ private:
       stale = (now - last_wrench_).seconds() > wrench_stale_;
       stale = stale || (use_scaling_ && (now - last_scaling_).seconds() > scaling_stale_);
       for (const auto & name : active_signals_) {
-        stale = stale || (now - signals_[name].stamp).seconds() > signal_stale_;
+        stale = stale || (now - signals_[name].stamp).seconds() > signals_[name].stale_s;
       }
     }
     if (stale) {request_stop(Result::ABORTED_SENSOR_STALE);}
@@ -345,7 +355,9 @@ private:
     for (const auto & name : goal.stop_signals) {
       const auto it = signals_.find(name);
       if (it == signals_.end()) {return "this tool has no stop signal called " + name;}
-      if ((now - it->second.stamp).seconds() > signal_stale_) {return "no recent signal " + name;}
+      if ((now - it->second.stamp).seconds() > it->second.stale_s) {
+        return "no recent signal " + name;
+      }
     }
     const auto joints = goal.trajectory.joint_names.size();
     for (const auto & p : goal.trajectory.points) {

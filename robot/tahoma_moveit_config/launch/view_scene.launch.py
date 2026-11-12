@@ -1,4 +1,4 @@
-"""RViz + scene_viewer. Args: site_dir (absolute), tool, pose, scene."""
+"""RViz + scene_viewer. Args: site_dir (absolute), tool, pose, scene, table (a table_* object or none)."""
 import os
 import tempfile
 
@@ -32,7 +32,7 @@ def setup(context):
              on_exit=Shutdown()),
         ExecuteProcess(cmd=["python3", "-m", "tahoma_moveit_config.scene_viewer",
                             "--urdf", urdf_path, "--srdf", srdf_path, "--workcell", workcell,
-                            "--pose", get("pose"), "--scene", get("scene")],
+                            "--pose", get("pose"), "--scene", get("scene"), "--table", get("table")],
                        output="screen", on_exit=Shutdown()),
     ]
 
@@ -43,5 +43,6 @@ def generate_launch_description():
         DeclareLaunchArgument("tool", default_value="capcup"),
         DeclareLaunchArgument("pose", default_value="drop_hide"),
         DeclareLaunchArgument("scene", default_value="limits_drop_hide"),
+        DeclareLaunchArgument("table", default_value="table_down"),
         OpaqueFunction(function=setup),
     ])

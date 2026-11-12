@@ -8,7 +8,9 @@ a caller got whichever came next; separate topics let the demo alternate on purp
 contact is already level the turn is undefined (NaN in the old code) and nothing is published
 on ~proposed_turn.
 
-Stops publishing when /cap_data is older than 0.2 s, so a stale proposal can't be used.
+Each proposal is stamped with the time of the cap sample it was computed from (the bridge's
+stamp), so a caller can wait for one from after its last move (S6, 2026-11-12). Stops
+publishing when /cap_data is older than STALE_S, so a stale proposal can't be used.
 The old node kept publishing its last numbers. Parameter: frame (the tool's TCP link).
 """
 import rclpy
@@ -19,7 +21,7 @@ from std_msgs.msg import Bool
 
 from capcup_driver.haptic import HapticSearch
 
-STALE_S = 0.2
+STALE_S = 0.5   # the board sends every 0.171 s (S6, 2026-11-12; 0.2 s left 29 ms)
 
 
 def main():
@@ -27,7 +29,7 @@ def main():
     node = rclpy.create_node("haptic_search")
     frame = node.declare_parameter("frame", "gripper_equilibrium_grasp").value
     search = HapticSearch()
-    last = [None]
+    last, sample = [None], [None]
     turn_pub = node.create_publisher(PoseStamped, "~/proposed_turn", 1)
     move_pub = node.create_publisher(PoseStamped, "~/proposed_move", 1)
     aligned_pub = node.create_publisher(Bool, "~/alignment", 1)
@@ -35,6 +37,7 @@ def main():
     def on_data(m):
         search.update(m.device_time_s, m.values)
         last[0] = node.get_clock().now()
+        sample[0] = m.header.stamp
 
     def tick():
         now = node.get_clock().now()
@@ -44,7 +47,7 @@ def main():
         if proposal is not None:
             t, q = proposal
             msg = PoseStamped()
-            msg.header.stamp = now.to_msg()
+            msg.header.stamp = sample[0]
             msg.header.frame_id = frame
             p, o = msg.pose.position, msg.pose.orientation
             p.x, p.y, p.z = map(float, t)

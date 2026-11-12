@@ -78,13 +78,17 @@ def pick(robot, cup, cfg, log=print):
     kind = "turn"
     details["turns"] = details["moves"] = 0
     while time.monotonic() < deadline:
+        # The last move has ended: wait for a cap sample taken after it, so alignment and the
+        # next proposal come from where the cup is now, not from a sample taken while it moved
+        # (the board sends every 0.171 s; user 2026-11-12).
+        asked = cup.now()
+        cup.wait_for_sample(after=asked)
         if cup.sealed():
             ended = "sealed"
             break
         if cup.aligned():
             ended = "aligned"
             break
-        asked = time.monotonic()
         proposal = cup.proposal(kind, newer_than=asked, wait_s=0.5)
         if proposal is None and kind == "turn":
             kind = "move"   # no turn is proposed while the contact is already level

@@ -4,7 +4,7 @@ Things left out for now, with what must happen before they are needed.
 | Item | Left out in | Needed by | To do |
 |---|---|---|---|
 | Camera links + meshes (realsense, azure_kinect, mounts) | S2 | S8, or earlier for any demo that uses a camera | Add them to the robot model with the old calibrated transforms. l515.dae (31.7 MB) and d435.dae (15.1 MB) exceed the 5 MB limit, so simplify them or use boxes. Add the camera links to collision checking, because the arm can hit the mounts |
-| `table_up` scene object | S2 | S7 | Measure the raised table, then check the old MPC table bounds against it |
+| `table_up` scene object | S2 | S7 | Top measured 1.00 m 2026-11-12 (meter stick, for the cap press); still check the old MPC table bounds against it |
 | Pod boxes the old code added only when `pod_bin_4h` was in TF (AddFullPodCollisionGeometry) | S2 | Before pick_stow | Read the old condition, then carry them over as a named scene |
 | Pod frame tilt | S2 | DONE 2026-11-10 | Calibrated by touch (docs/procedures/pod_calibration.md): lean 0.74 deg (real, bubble level agrees), face within 0.8 mm, width checked by both sides. Bin model rebuilt from the lab pod's tape measurements. Open: rows are tape (+-1 cm); limits_full/limits_drop_hide x_max 0.95 vs the measured face (about 0.93 at the top to 0.96 low) |
 | Limits as UR safety planes | S2 | Not planned | Skipped (user, 2026-11-09): most of what matters is out of the arm's reach. If revisited: side walls as stop planes, pod face as a Trigger Reduced Mode plane, back of bins as a stop plane after pod recalibration; planes can be authored and tested in URSim here, then loaded and confirmed on the tablet |

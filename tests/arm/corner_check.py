@@ -19,6 +19,8 @@ import numpy as np
 from tahoma_moveit_config import workcell as W
 from tahoma_robot import Robot, Stop
 
+import slider
+
 WORKCELL = os.environ.get("WORKCELL", "/repo/sites/uw_lab/workcell.yaml")
 LIMIT_N = 50.0
 START = "pre_bin_3g"
@@ -46,7 +48,7 @@ def main():
     p.add_argument("--gap", type=float, default=0.05)
     p.add_argument("--final", type=float, default=0.01)
     p.add_argument("--pose", default=START, help="back: named pose to go to")
-    p.add_argument("--speed", type=float, default=1.0)   # planner scaling; the tablet slider sets the real speed (user 2026-11-10)
+    p.add_argument("--tip-speed", type=float, default=0.1)   # planned moves end 5 cm from the pod: tip cap 0.1 m/s, safe at slider 100 % (user 2026-11-12)
     args = p.parse_args()
     if not 0.02 <= args.gap <= 0.3:
         raise SystemExit("--gap is 0.02 to 0.3 m")
@@ -61,8 +63,9 @@ def main():
             pose = args.pose if args.step == "back" else START
             if pose != START:   # the cap_cup demo's hide scene (sites/uw_lab/demos/cap_cup.yaml) + the bins
                 robot.scene.use("limits_drop_hide", "table_down", "pod_partial", "pod_bins")
-            print(f"\nNEXT: planned move to {pose} at {args.speed:.0%}", flush=True)
-            print(f"RESULT {robot.go_named(pose, speed=args.speed).reason}")
+            print(f"\nNEXT: planned move to {pose}, tip up to {args.tip_speed:.2f} m/s"
+                  + slider.note(robot, args.tip_speed, "m/s", 1.0), flush=True)
+            print(f"RESULT {robot.go_named(pose, tip_speed=args.tip_speed).reason}")
         elif args.step in ("in", "out"):
             p0, q0 = robot.tcp_pose()
             gap_now = -(np.linalg.inv(T) @ np.r_[p0, 1])[1]
@@ -74,7 +77,7 @@ def main():
             if abs(d) > 0.06:
                 raise SystemExit(f"would move {1000 * d:.0f} mm; in/out only go up to 60 mm (gap now {1000 * gap_now:.0f} mm)")
             print(f"\nNEXT: straight {1000 * d:+.0f} mm along the cup (gap {1000 * gap_now:.0f} -> "
-                  f"{1000 * want:.0f} mm), 0.01 m/s, 10 N stop", flush=True)
+                  f"{1000 * want:.0f} mm), 10 mm/s" + slider.note(robot, 0.01) + ", 10 N stop", flush=True)
             print(f"RESULT {robot.move_straight((0, 0, d), speed=0.01, stop=Stop(force_n=10)).reason}")
         else:
             lo, hi = W.bin_box(wc, "pod_bins", args.bin)
@@ -85,8 +88,9 @@ def main():
             quat = W._quaternion(R)
             print(f"\nNEXT: planned move, TCP {1000 * args.gap:.0f} mm in front of the top right "
                   f"corner of {args.bin} (pod x {hi[0]:.3f}, z {hi[2]:.3f}; base_link "
-                  f"{xyz[0]:.3f} {xyz[1]:.3f} {xyz[2]:.3f}), {args.speed:.0%}", flush=True)
-            print(f"RESULT {robot.plan_to(xyz, quat, speed=args.speed).reason}")
+                  f"{xyz[0]:.3f} {xyz[1]:.3f} {xyz[2]:.3f}), tip up to {args.tip_speed:.2f} m/s"
+                  + slider.note(robot, args.tip_speed, "m/s", 1.0), flush=True)
+            print(f"RESULT {robot.plan_to(xyz, quat, tip_speed=args.tip_speed).reason}")
         p_, q_ = robot.tcp_pose()
         local = np.linalg.inv(T) @ np.r_[p_, 1]
         axis = T[:3, :3].T @ rot_of(q_)[:, 2]

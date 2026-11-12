@@ -64,8 +64,9 @@ class Viewer(QtWidgets.QWidget):
         self.scene = QtWidgets.QComboBox()
         self.scene.addItems([NO_SCENE] + list(wc["scenes"]))
         self.scene.setCurrentText(scene)
-        self.table = QtWidgets.QCheckBox("table_down")
-        self.table.setChecked(table)
+        self.table = QtWidgets.QComboBox()
+        self.table.addItems([NO_SCENE] + sorted(n for n in wc["objects"] if n.startswith("table")))
+        self.table.setCurrentText(table)
         self.verdict = QtWidgets.QLabel()
         self.verdict.setAlignment(QtCore.Qt.AlignCenter)
         form = QtWidgets.QFormLayout(self)
@@ -73,9 +74,8 @@ class Viewer(QtWidgets.QWidget):
         form.addRow("Limits / pod", self.scene)
         form.addRow("Table", self.table)
         form.addRow(self.verdict)
-        for combo in (self.pose, self.scene):
+        for combo in (self.pose, self.scene, self.table):
             combo.currentTextChanged.connect(self.refresh)
-        self.table.toggled.connect(self.refresh)
 
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.tick)
@@ -84,7 +84,7 @@ class Viewer(QtWidgets.QWidget):
 
     def refresh(self, *_):
         names = [] if self.scene.currentText() == NO_SCENE else [self.scene.currentText()]
-        names += ["table_down"] if self.table.isChecked() else []
+        names += [] if self.table.currentText() == NO_SCENE else [self.table.currentText()]
         objects = W.object_names(self.wc, names)
         self.q = self.wc["named_poses"][self.pose.currentText()]
         # moveit_py shares one world between PlanningScene objects, so clear it every time.
@@ -114,13 +114,15 @@ def main():
         parser.add_argument(name, required=True)
     parser.add_argument("--pose", default="drop_hide")
     parser.add_argument("--scene", default="limits_drop_hide")
+    parser.add_argument("--table", default="table_down", help="a table_* object, or none")
     parser.add_argument("--no-table", action="store_true")
     args, ros_args = parser.parse_known_args()
     rclpy.init(args=ros_args)
     node = rclpy.create_node("scene_viewer")
     model = RobotModel(urdf_xml_path=args.urdf, srdf_xml_path=args.srdf)
     app = QtWidgets.QApplication(sys.argv[:1])
-    window = Viewer(node, model, W.load(args.workcell), args.pose, args.scene, not args.no_table)
+    window = Viewer(node, model, W.load(args.workcell), args.pose, args.scene,
+                    NO_SCENE if args.no_table or args.table == "none" else args.table)
     window.show()
     app.exec_()
     rclpy.shutdown()

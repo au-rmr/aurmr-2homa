@@ -15,8 +15,13 @@ limits:
 objects:
   # Measured 2026-11-06: top 0.725 above floor, 0.61 x 1.52, far edge 0.13 from the pod face,
   # left edge 0.17 inside the frame base left edge (y = 0.765, facing the pod).
-  # Thickness is assumed. table_up is not measured yet: docs/deferred.md
+  # Thickness is assumed.
   table_down: {frame: base_link, xyz: [0.515, -0.165, 0.70], size: [0.61, 1.52, 0.05]}
+  # The same standing desk raised (2026-11-12). Touched by the arm (aluminium end, 4 points,
+  # ~/refresh/phase3/s6/table_points.csv): top plane z = 0.99140 + 0.02036 x + 0.00052 y, residuals
+  # <= 0.24 mm: 1.0006 at the cap press spot (0.45, 0), rising 1.17 deg towards the pod, level in y.
+  # Footprint assumed = table_down's. Lowered, it is out of the cup's reach (arm shoulder z 1.84).
+  table_up: {frame: base_link, xyz: [0.5155, -0.165, 0.9768], rpy: [0, -0.02036, 0], size: [0.61, 1.52, 0.05]}
   # Carried from aurmr_tasks planning_scene.py. These follow the pod frame, so they inherit
   # its calibration (by touch 2026-11-10; was a false 2.35 degree tilt).
   # Uprights: L-channel, both legs ~30 mm (user 2026-11-10); a 30 x 30 post at the front covers the L, floor to the pod top ~2.55 m. Were 0.033 x 0.94, z 0.3-2.6.

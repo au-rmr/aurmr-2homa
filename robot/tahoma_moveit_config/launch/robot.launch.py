@@ -64,6 +64,9 @@ def setup(context):
                                   additional_env=private_env)
     with open(os.path.join(share(tool), "tool.yaml")) as f:
         signals = yaml.safe_load(f)["stop_signals"]
+    # Each entry: a topic, or {topic, stale_s, max_speed} (tool.yaml).
+    signal_topics = [v if isinstance(v, str) else v["topic"] for v in signals.values()]
+    signal_stales = [0.1 if isinstance(v, str) else float(v.get("stale_s", 0.1)) for v in signals.values()]
     wrench = get("wrench_topic") or (
         "/force_torque_sensor_broadcaster/wrench" if real else "/wrench")
     scaling = (get("speed_scaling_topic") or "/speed_scaling_state_broadcaster/speed_scaling"
@@ -84,7 +87,8 @@ def setup(context):
         # If the motion server dies, everything stops with it, the driver included.
         Node(package="tahoma_control", executable="motion_server", output="screen",
              on_exit=Shutdown(reason="motion_server exited"), additional_env=server_env,
-             parameters=[{"signal_names": list(signals), "signal_topics": list(signals.values()),
+             parameters=[{"signal_names": list(signals), "signal_topics": signal_topics,
+                          "signal_stale_each_s": signal_stales,
                           "use_speed_scaling": bool(scaling), "wrench_topic": wrench,
                           "joints_topic": "/joint_states",
                           "speed_scaling_topic": scaling or "speed_scaling",

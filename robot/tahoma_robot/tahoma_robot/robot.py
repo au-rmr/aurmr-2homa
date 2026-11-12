@@ -47,6 +47,13 @@ MAX_SIGNAL_SPEED = 0.03         # m/s when a stop signal is what ends the move
 MAX_STRAIGHT_SPEED = 0.25       # m/s, a typo guard; UR's own tool speed limit is 1.5 m/s
 MAX_FORCE_LIMIT_N = 150.0
 DEFAULT_ANGULAR_SPEED = 0.2     # rad/s for the tool's turn in a straight move, about 11 deg/s
+# Planned moves (user 2026-11-12): every move must be safe with the tablet slider at 100 %, so a
+# planned move is capped at a tool tip speed too, not only by joint scaling. The slider is set once
+# per session and only slows things down.
+DEFAULT_PLANNED_SPEED = 0.3          # joint velocity/acceleration scaling (fraction of the limits)
+DEFAULT_PLANNED_TIP_SPEED = 0.25     # m/s, tool tip
+DEFAULT_PLANNED_ANGULAR_SPEED = 0.8  # rad/s, tool turn, about 46 deg/s
+MAX_PLANNED_TIP_SPEED = 0.5          # m/s, a typo guard
 MAX_ANGULAR_SPEED = 1.0       # same as motion_server and UR's own tool force limit
 PLAN_RETRIES = 2                # nothing has moved at that point
 # FAILURE covers plans the check rejected and goals that are truly impossible: MoveIt gives both
@@ -228,22 +235,27 @@ class Robot:
         return (p.x, p.y, p.z), (q.x, q.y, q.z, q.w)
 
     # --- Moves ---------------------------------------------------------------------------------
-    def go_named(self, name, speed=0.3):
-        return self.go_joints(self.workcell["named_poses"][name], speed)
+    def go_named(self, name, speed=DEFAULT_PLANNED_SPEED, tip_speed=DEFAULT_PLANNED_TIP_SPEED,
+                 angular_speed=DEFAULT_PLANNED_ANGULAR_SPEED):
+        return self.go_joints(self.workcell["named_poses"][name], speed, tip_speed, angular_speed)
 
-    def go_joints(self, values, speed=0.3):
-        """Planned move to joint values, in ARM_JOINTS order or as a {joint: value} dict."""
+    def go_joints(self, values, speed=DEFAULT_PLANNED_SPEED, tip_speed=DEFAULT_PLANNED_TIP_SPEED,
+                  angular_speed=DEFAULT_PLANNED_ANGULAR_SPEED):
+        """Planned move to joint values, in ARM_JOINTS order or as a {joint: value} dict.
+        speed scales the joint limits; tip_speed (m/s) and angular_speed (rad/s) cap the tool."""
         if isinstance(values, dict):
             values = [values[n] for n in ARM_JOINTS]
         goal = Constraints(joint_constraints=[
             JointConstraint(joint_name=n, position=float(v), tolerance_above=0.001,
                             tolerance_below=0.001, weight=1.0)
             for n, v in zip(ARM_JOINTS, values, strict=True)])
-        return self._run(self._plan_to_constraints(goal, speed))
+        return self._run(self._planned(goal, speed, tip_speed, angular_speed))
 
-    def plan_to(self, xyz, quat, speed=0.3, position_tolerance=0.005, angle_tolerance=0.02,
-                link=None):
-        """Planned move putting link (default: the tool's TCP) at xyz, quat in base_link."""
+    def plan_to(self, xyz, quat, speed=DEFAULT_PLANNED_SPEED, position_tolerance=0.005,
+                angle_tolerance=0.02, link=None, tip_speed=DEFAULT_PLANNED_TIP_SPEED,
+                angular_speed=DEFAULT_PLANNED_ANGULAR_SPEED):
+        """Planned move putting link (default: the tool's TCP) at xyz, quat in base_link.
+        speed scales the joint limits; tip_speed (m/s) and angular_speed (rad/s) cap the tool."""
         link = link or self.tcp
         target = PoseStamped()
         target.header.frame_id = BASE
@@ -263,7 +275,7 @@ class Robot:
                 absolute_x_axis_tolerance=angle_tolerance,
                 absolute_y_axis_tolerance=angle_tolerance,
                 absolute_z_axis_tolerance=angle_tolerance)])
-        return self._run(self._plan_to_constraints(goal, speed))
+        return self._run(self._planned(goal, speed, tip_speed, angular_speed))
 
     def move_straight(self, offset, frame="tool", stop=None, speed=DEFAULT_STRAIGHT_SPEED,
                       check_collisions=True, rotation=None, angular_speed=DEFAULT_ANGULAR_SPEED):
@@ -284,8 +296,8 @@ class Robot:
             raise ValueError(f"offset must be finite, got {offset}")
         self._stop_asked = False
         stop = stop or Stop()
-        if stop.signals():
-            speed = min(speed, MAX_SIGNAL_SPEED)
+        for name in stop.signals():
+            speed = min(speed, self._signal_max_speed(name))
         if frame not in ("tool", "base"):
             raise ValueError("frame must be tool or base")
         xyz, quat = self.tcp_pose()
@@ -365,6 +377,22 @@ class Robot:
             self._wait(goal.cancel_goal_async())
 
     # --- Internals -----------------------------------------------------------------------------
+    def _signal_max_speed(self, name):
+        """MAX_SIGNAL_SPEED, or lower if the tool says so: a slow signal (contact at 5.8 Hz) lets
+        the tip travel further before the stop (tool.yaml stop_signals)."""
+        spec = self.tool.get("stop_signals", {}).get(name)
+        if isinstance(spec, dict) and "max_speed" in spec:
+            return min(MAX_SIGNAL_SPEED, float(spec["max_speed"]))
+        return MAX_SIGNAL_SPEED
+
+    def _planned(self, goal, speed, tip_speed, angular_speed):
+        if not math.isfinite(tip_speed) or not 0 < tip_speed <= MAX_PLANNED_TIP_SPEED:
+            raise ValueError(f"tip_speed is in m/s, above 0 up to {MAX_PLANNED_TIP_SPEED}, got {tip_speed}")
+        if not math.isfinite(angular_speed) or not 0 < angular_speed <= MAX_ANGULAR_SPEED:
+            raise ValueError(f"angular_speed is in rad/s, above 0 up to {MAX_ANGULAR_SPEED}")
+        trajectory = self._plan_to_constraints(goal, speed)
+        return self._limit_tip_speed(trajectory, tip_speed, angular_speed)
+
     def _plan_to_constraints(self, goal, speed):
         if not math.isfinite(speed) or not 0 < speed <= 1:
             raise ValueError(f"speed is a fraction of full speed, above 0 up to 1, got {speed}")

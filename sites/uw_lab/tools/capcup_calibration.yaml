@@ -1,0 +1,18 @@
+# CapCup channel calibration, 2026-11-12, tests/arm/cap_fit.py from:
+#   cal_A.csv
+#   cal_B.csv
+#   cal_C.csv
+# Channel k's change from its in-air value ~ gains[k] * curve(deflection), loading side.
+# In-air values are taken at run time (they drift), never from this file.
+gains: [0.8353, 0.8167, 0.8028, 0.9376, 1.1351, 1.2382, 1.1974, 1.037]
+curve:
+  deflection_mm: [0.17, 0.76, 1.26, 1.67, 2.26, 2.72, 3.26, 3.79, 4.27, 4.72, 5.26, 5.76, 6.25, 6.78,
+    7.16, 7.73]
+  counts: [1594, 10427, 17500, 24556, 32451, 39697, 47528, 55804, 63511, 70281, 76940, 83846, 90268, 101637,
+    115985, 140549]
+residual_pct: 9.7
+samples: 151
+per_run_gains:
+- [0.7627, 0.7567, 0.7875, 0.9959, 1.2618, 1.3221, 1.1697, 0.9436]
+- [0.7674, 0.7721, 0.8068, 0.9992, 1.2302, 1.2909, 1.1692, 0.9642]
+- [0.9055, 0.869, 0.8084, 0.8777, 1.0242, 1.1699, 1.2252, 1.1201]

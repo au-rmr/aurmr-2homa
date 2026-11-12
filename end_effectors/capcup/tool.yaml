@@ -7,6 +7,10 @@ cog_m: [0.0, 0.0, 0.1067]   # from arm_tool0; middle of the cup body (0.0169 + 0
 capabilities: [contact, suction]
 client: capcup_driver.client:CapCup   # built by aurmr_skills.load_tool(robot)
 # Bool topics a move can stop on. The topics are published by the tool's drivers (S5).
+# A topic, or {topic, stale_s, max_speed}: stale_s = how old the last message may be before
+# motion_server stops (default 0.1 s); max_speed = cap (m/s) on a move stopping on it.
+# contact comes once per cap board sample, every 0.171 s (S6, 2026-11-12): 0.5 s = ~3 samples;
+# at 0.01 m/s the tip moves 1.7 mm per sample and at most 5 mm before a dead board stops it.
 stop_signals:
-  contact: /cap_contact
-  seal: /vacuum_seal
+  contact: {topic: /cap_contact, stale_s: 0.5, max_speed: 0.01}
+  seal: /vacuum_seal   # 50 Hz from the ejector driver

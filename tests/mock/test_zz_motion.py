@@ -117,6 +117,38 @@ def test_go_named(robot):
     assert all(abs(robot.joints()[n] - v) < 0.01 for n, v in zip(ARM_JOINTS, target))
 
 
+def test_planned_move_keeps_tip_under_cap(robot):
+    """Planned moves are capped at a tool tip speed (user 2026-11-12: safe at slider 100 %).
+    Sampled from TF while the move runs; the cap is low so the default joint scaling would beat it."""
+    import threading
+    robot.go_named("drop_hide")
+    samples, done = [], threading.Event()
+
+    from rclpy.time import Time
+
+    def watch():   # TF's own stamps: reading times jitter and would show false speed spikes
+        last = None
+        while not done.is_set():
+            t = robot._tf.lookup_transform("base_link", robot.tcp, Time())
+            stamp = t.header.stamp.sec + t.header.stamp.nanosec * 1e-9
+            if stamp != last:
+                p = t.transform.translation
+                samples.append((stamp, (p.x, p.y, p.z)))
+                last = stamp
+            time.sleep(0.05)
+
+    t = threading.Thread(target=watch)
+    t.start()
+    try:
+        assert robot.go_named("pre_bin_3g", tip_speed=0.05).reason == "done"
+    finally:
+        done.set()
+        t.join()
+    speeds = [moved(a, b) / (tb - ta) for (ta, a), (tb, b) in zip(samples, samples[1:]) if tb > ta]
+    assert max(speeds) < 0.05 * 1.3, max(speeds)
+    assert moved(samples[0][1], samples[-1][1]) > 0.2   # it really travelled
+
+
 def test_unknown_or_unreachable_raise(robot):
     with pytest.raises(KeyError):
         robot.go_named("nope")
@@ -405,7 +437,7 @@ def test_silent_wrench_refused_before_moving(robot, sensors):
 
 def test_requested_signal_silent_refused(robot, sensors):
     sensors.set_flags(signals=False)
-    time.sleep(0.3)
+    time.sleep(0.7)   # past contact's stale_s (0.5 s in tool.yaml: the board sends at 5.8 Hz)
     from tahoma_robot import ExecutionFailed
     with pytest.raises(ExecutionFailed):
         robot.move_straight((0, 0, -0.03), stop=Stop(contact=True))

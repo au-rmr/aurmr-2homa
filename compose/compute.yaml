@@ -49,6 +49,34 @@ services:
       site_dir:=/repo/sites/$${AURMR_SITE:-uw_lab}"
     restart: "no"
 
+  # CapCup dashboard window (old ROS 1 cap_dashboard, ported). Profile dashboard. Needs the
+  # desktop's DISPLAY and XAUTHORITY in the environment (e.g. DISPLAY=:1
+  # XAUTHORITY=/run/user/$UID/gdm/Xauthority on inter). Image: docker/dashboard (adds pyqtgraph).
+  dashboard:
+    <<: *ros
+    image: ghcr.io/au-rmr/aurmr-2homa/dashboard:dev
+    build: {context: .., dockerfile: docker/dashboard/Dockerfile}
+    profiles: [dashboard]
+    volumes:
+      - ..:/repo:ro
+      - dashboard_ws:/ws
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${XAUTHORITY:?set XAUTHORITY}:/tmp/.Xauthority:ro
+    environment:
+      DISPLAY: ${DISPLAY:?set DISPLAY}
+      XAUTHORITY: /tmp/.Xauthority
+      QT_X11_NO_MITSHM: "1"
+      LIBGL_ALWAYS_SOFTWARE: "1"   # 2D plots only; avoids the nvidia-drm GLX warnings
+      CAPCUP_CALIBRATION: /repo/sites/${AURMR_SITE:-uw_lab}/tools/capcup_calibration.yaml
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+      colcon --log-base /ws/log build --base-paths /repo/end_effectors
+      --build-base /ws/build --install-base /ws/install &&
+      source /ws/install/setup.bash &&
+      exec ros2 run capcup_driver cap_dashboard"
+    restart: "no"
+
 volumes:
   shell_ws:
   tool_ws:
+  dashboard_ws:
