@@ -20,9 +20,9 @@ from bondpy.bondpy import Bond
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.msg import (BoundingVolume, CollisionObject, Constraints, JointConstraint,
                              MoveItErrorCodes, OrientationConstraint, PlanningScene,
-                             PositionConstraint)
+                             PlanningSceneComponents, PositionConstraint)
 from moveit_msgs.srv import (ApplyPlanningScene, GetCartesianPath, GetMotionPlan,
-                             GetPositionFK)
+                             GetPlanningScene, GetPositionFK)
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
@@ -111,10 +111,16 @@ class Scene:
         self._placed = []
 
     def use(self, *names):
-        """Replaces the whole scene with these scenes and objects from the site's workcell."""
+        """Replaces the whole scene with these scenes and objects from the site's workcell.
+        Removes every workcell object MoveIt holds that isn't wanted, also ones an earlier process
+        placed (a demo run's last scene stayed in the world for the next run, 2026-11-12)."""
         request = ApplyPlanningScene.Request(scene=PlanningScene(is_diff=True))
         wanted = W.object_names(self._robot.workcell, names)
-        for name in self._placed:
+        ask = GetPlanningScene.Request()
+        ask.components.components = PlanningSceneComponents.WORLD_OBJECT_NAMES
+        present = self._robot._wait(self._robot._get_scene.call_async(ask))
+        known = self._robot.workcell["objects"]
+        for name in sorted({o.id for o in present.scene.world.collision_objects if o.id in known}):
             request.scene.world.collision_objects.append(
                 CollisionObject(id=name, operation=CollisionObject.REMOVE))
         for name in wanted:
@@ -154,6 +160,7 @@ class Robot:
         self._cartesian = self._node.create_client(GetCartesianPath, "compute_cartesian_path")
         self._fk = self._node.create_client(GetPositionFK, "compute_fk")
         self._apply_scene = self._node.create_client(ApplyPlanningScene, "apply_planning_scene")
+        self._get_scene = self._node.create_client(GetPlanningScene, "get_planning_scene")
         self._connect = self._node.create_client(Connect, "motion_server/connect")
         self._execute = ActionClient(self._node, ExecuteTrajectory, "motion_server/execute")
         self._executor = MultiThreadedExecutor()

@@ -71,6 +71,14 @@ def test_picks_a_tilted_item(world, tilt):
     assert moves >= 1, "the search must have moved the cup at least once"
     time.sleep(0.5)
     assert world.tilts, "the fake world saw no seal"
+    # Out far enough that an item as deep as a bin is clear of the pod (user 2026-11-12):
+    # tip <= pod face - held_depth_m (0.15) - retreat_clear_m (0.02, sites/uw_lab/demos/cap_cup.yaml),
+    # plus 5 mm for the move's end.
+    done = [ln for ln in lines if ln.startswith("retreat ended:")]
+    assert done, "\n".join(lines[-30:])
+    tip_x = float(done[-1].split("tip x ")[1].split(",")[0])
+    face_x = float(done[-1].split("pod face ")[1].split(",")[0])
+    assert tip_x <= face_x - 0.15 - 0.02 + 0.005, done[-1]
     print(f"tilt at the seal {world.tilts[0]:.1f} deg, from {abs(tilt)}")
     # The old search alternates turn and move proposals every 20 ms and the demo takes the next
     # one, so a pick may seal by pressing deeper without turning. It must never turn the wrong way

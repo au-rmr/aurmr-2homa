@@ -7,8 +7,8 @@
 3. Haptic search: until the vacuum seals, or the time runs out: back off a little, then move
    by the cup's proposed pose change, stopping if the vacuum seals. Steps alternate on purpose:
    a turn (tilt to level the contact), then a move (sideways towards the load), and so on.
-4. Lift, back straight out until the tool is clear of the pod-face wall, put the wall back,
-   then a planned move to hide, and blow off.
+4. Lift, back straight out until a held item as deep as a bin would be clear of the pod face,
+   then a planned move to hide with the pod-face wall pushed out by that depth, and blow off.
 
 Changes from the old code, on purpose:
 - The search ends only on a vacuum seal (or the time limit), not when the cap reads aligned
@@ -36,6 +36,7 @@ from tahoma_robot.robot import _rotate
 @dataclass
 class Config:
     scene_hide: list
+    scene_hide_held: list   # after the retreat: the pod-face wall pushed out by held_depth_m
     scene_work: list
     scene_bin: list     # inside the bin: side walls and the pod's bins, no pod-face wall
     pod_face_limit: str  # the limits whose x_max wall is the pod face
@@ -47,7 +48,8 @@ class Config:
     search_timeout_s: float = 20.0
     clearance_m: float = 0.005
     lift_m: float = 0.03
-    retreat_clear_m: float = 0.05   # the tool tip ends this far in front of the pod-face wall
+    retreat_clear_m: float = 0.05   # the tool tip ends this far in front of the pod face + held_depth_m
+    held_depth_m: float = 0.15      # the deepest item the cup might hold (a bin's depth)
     straight_speed: float = 0.01
     planned_speed: float = 0.2
 
@@ -114,7 +116,10 @@ def pick(robot, cup, cfg, log=print):
     robot.move_straight((0, 0, cfg.lift_m), frame="base", speed=cfg.straight_speed)
     held = cup.sealed()
     retreat(robot, cfg, way_in)
-    hide(robot, cfg)
+    face_x = robot.workcell["limits"][cfg.pod_face_limit]["x_max"]
+    log(f"retreat ended: tip x {robot.tcp_pose()[0][0]:.3f}, pod face {face_x:.3f}, "
+        f"held-item wall {face_x - cfg.held_depth_m:.3f}")
+    hide(robot, cfg, held=True)
     cup.blow()
     time.sleep(0.5)
     cup.off()
@@ -123,8 +128,9 @@ def pick(robot, cup, cfg, log=print):
 
 def retreat(robot, cfg, way_in):
     """Backs straight out along the approach direction until the tool tip is retreat_clear_m in
-    front of the pod-face wall, then puts the wall back (scene_work)."""
-    face_x = robot.workcell["limits"][cfg.pod_face_limit]["x_max"]
+    front of the pod-face wall moved out by held_depth_m: a held item as deep as a bin is then
+    clear of the pod (user 2026-11-12). Then puts the wall back (scene_work)."""
+    face_x = robot.workcell["limits"][cfg.pod_face_limit]["x_max"] - cfg.held_depth_m
     if way_in[0] < 0.5:
         raise ValueError(f"the approach doesn't point into the pod (+x): {way_in}")
     xyz, _ = robot.tcp_pose()
@@ -134,6 +140,8 @@ def retreat(robot, cfg, way_in):
     robot.scene.use(*cfg.scene_work)
 
 
-def hide(robot, cfg):
-    robot.scene.use(*cfg.scene_hide)
+def hide(robot, cfg, held=False):
+    """Planned move to drop_hide. held: the cup may carry an item (after a pick attempt), so the
+    pod-face wall stands held_depth_m further out (scene_hide_held)."""
+    robot.scene.use(*(cfg.scene_hide_held if held else cfg.scene_hide))
     robot.go_named("drop_hide", speed=cfg.planned_speed)

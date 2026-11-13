@@ -1,5 +1,7 @@
 # cap_cup demo at the UW lab. Values from the old ROS 1 hard_code_pose script.
 scene_hide: [limits_drop_hide, table_down, pod_partial]
+# After the retreat, holding (maybe) an item up to a bin deep: the pod-face wall 15 cm further out.
+scene_hide_held: [limits_drop_hide_held, table_down, pod_partial]
 scene_work: [limits_full, table_down, pod_partial, pod_bins]
 # Inside the bin: the pod-face wall (limits_full_x_max) is off, the side walls stay, the rigid
 # pod parts are true size, and bin 2H's canvas may be pushed 2 cm (pod_bins_soft_2h, no lip;
@@ -15,6 +17,10 @@ touch_force_n: 15.0       # backup force stop while touching; the old demo had n
 search_timeout_s: 20.0    # old CheckCapAlignment timeout
 clearance_m: 0.005        # old RETRACT_FOR_CLEARANCE and GetHapticSearchPose clearance
 lift_m: 0.03              # old LIFT_OBJ, in base_link
-retreat_clear_m: 0.05     # back out until the tool tip is 5 cm in front of the pod-face wall (old CLEAR_WALL: 20 cm)
+retreat_clear_m: 0.02     # back out until the tool tip is 2 cm in front of the pod-face wall pushed out by held_depth_m.
+                          # 2 cm, not 5 (user 2026-11-12): straight back out of 2H the arm folds into itself (wrist 1 vs
+                          # upper arm) at tip x ~0.75; this stops at 0.78. Contact with the flexible face/flaps is fine,
+                          # and a sealed suction cup retracts, so the item sits up to ~8 mm behind the modelled tip.
+held_depth_m: 0.15        # worst-case held item: as deep as a bin (pod_bins depth 0.150); user 2026-11-12, after an item caught on the pod
 straight_speed: 0.01      # m/s
 planned_speed: 0.2
