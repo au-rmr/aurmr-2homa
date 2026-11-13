@@ -1,4 +1,4 @@
 # The capcup's devices at this site.
 cap_board_port: 12345      # the board streams UDP to the compute host (inter) on this port
 ejector_ip: 192.168.137.2  # Schmalz ejector, on the control host's (emmons) ejector adapter
-seal_mbar: 750             # the old demo's "item held" threshold
+seal_mbar: device          # the ejector's own part-present switch (H2 550 / h2 10 mbar, read 2026-11-12); a number overrides. The old 750 sat inside the air-saving cycle (off at 850, on at 700) and flickered

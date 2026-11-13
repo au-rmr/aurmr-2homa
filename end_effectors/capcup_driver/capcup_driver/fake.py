@@ -23,6 +23,9 @@ class FakeCIP:
                 mode = {v: k for k, v in E.CONTROL_BYTES.items()}[bytes(request_data)]
                 self._mode, self._since = mode, time.monotonic()
                 return SimpleNamespace(value=b"", error=None)
+            if instance in (E.SETPOINT_H2, E.HYSTERESIS_H2):   # the lab ejector's settings
+                v = 550 if instance == E.SETPOINT_H2 else 10
+                return SimpleNamespace(value=v.to_bytes(2, "little") * 16, error=None)
             level = 0
             if self._mode == E.SUCK and self.item_present:
                 done = 1.0 if self._rise <= 0 else (time.monotonic() - self._since) / self._rise

@@ -9,6 +9,10 @@ CLASS = 0xA2
 ATTRIBUTE = 5
 EJECTOR_CONTROL = 13
 SYSTEM_VACUUM = 515
+# Per-ejector settings, 16 x uint16 each (old driver VacuumGripperSocketNode.py): air saving
+# turns the valve off at H1 and on again at H1 - h1; "part present" is on above H2, off below
+# H2 - h2. Read 2026-11-12 on the lab's ejector: H1 850, h1 150, H2 550, h2 10 mbar.
+SETPOINT_H1, HYSTERESIS_H1, SETPOINT_H2, HYSTERESIS_H2 = 100, 101, 102, 103
 OFF, SUCK, BLOW = 0, 1, 2
 CONTROL_BYTES = {
     OFF: bytes(16),
@@ -62,6 +66,18 @@ class Ejector:
         if reply is None or getattr(reply, "error", None) or len(reply.value) < 6:
             raise ConnectionError("ejector gave no vacuum reading")
         return int.from_bytes(reply.value[4:6], "little")
+
+    def _ejector_value(self, instance):
+        from pycomm3 import Services
+        reply = self._call(service=Services.get_attribute_single, instance=instance)
+        if reply is None or getattr(reply, "error", None) or len(reply.value) < 6:
+            raise ConnectionError(f"ejector gave no value for parameter {instance}")
+        return int.from_bytes(reply.value[4:6], "little")   # ejector 3, as the vacuum reading
+
+    def part_present_mbar(self):
+        """(on above, off below) in mbar: the ejector's own part-present switch, H2 and H2 - h2."""
+        h2 = self._ejector_value(SETPOINT_H2)
+        return h2, h2 - self._ejector_value(HYSTERESIS_H2)
 
     def close(self):
         if self._driver is not None:

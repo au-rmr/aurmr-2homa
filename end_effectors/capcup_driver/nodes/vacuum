@@ -21,7 +21,10 @@ def main():
     node = rclpy.create_node("vacuum")
     ip = node.declare_parameter("ip", "").value
     rate = node.declare_parameter("rate_hz", 50.0).value
-    seal_mbar = node.declare_parameter("seal_mbar", 750.0).value
+    # <= 0: use the ejector's own part-present switch (H2, H2 - h2), read at start. A number: seal
+    # above it. The old 750 sat inside the air-saving cycle (valve off at 850, on at 700), so the
+    # seal flickered on a perfect seal (S6, 2026-11-12).
+    seal_mbar = node.declare_parameter("seal_mbar", -1.0).value
     fake = node.declare_parameter("fake", False).value
     # Tests only: with a fake ejector, whether an item is under the cup follows this Bool topic.
     fake_item_topic = node.declare_parameter("fake_item_topic", "").value
@@ -37,6 +40,12 @@ def main():
         if not ip:
             raise SystemExit("vacuum: parameter ip is required")
         ejector = Ejector(ip)
+    if seal_mbar > 0:
+        seal_on, seal_off = seal_mbar, seal_mbar
+    else:
+        seal_on, seal_off = ejector.part_present_mbar()
+    node.get_logger().info(f"seal on above {seal_on} mbar, off below {seal_off} mbar")
+    state = {"seal": False}
     lock = threading.Lock()
     level_pub = node.create_publisher(Float32, "/vacuum/system_vacuum_mbar", qos_profile_sensor_data)
     seal_pub = node.create_publisher(Bool, "/vacuum_seal", qos_profile_sensor_data)
@@ -52,7 +61,11 @@ def main():
                 node.get_logger().error(f"vacuum reading failed ({failures[0]} so far): {e}")
             return
         level_pub.publish(Float32(data=float(mbar)))
-        seal_pub.publish(Bool(data=mbar > seal_mbar))
+        if mbar > seal_on:
+            state["seal"] = True
+        elif mbar < seal_off:
+            state["seal"] = False
+        seal_pub.publish(Bool(data=state["seal"]))
 
     def on_set(request, response):
         if request.mode not in (SetVacuum.Request.OFF, SetVacuum.Request.SUCK,

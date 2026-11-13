@@ -90,6 +90,15 @@ def test_ejector_reads_vacuum_as_the_old_driver():
         bytes(Services.get_attribute_single), 0xA2, 515, 5)
 
 
+def test_ejector_reads_its_part_present_switch():
+    """H2 and h2 (parameters 102, 103, ejector 3 at bytes 4:6), as the old driver's getters."""
+    from pycomm3 import Services
+    cip = FakeCIP()
+    assert E.Ejector("x", driver_factory=lambda _: cip).part_present_mbar() == (550, 540)
+    assert [(r[2], r[3]) for r in cip.requests] == [(102, 5), (103, 5)]
+    assert all(r[0] == bytes(Services.get_attribute_single) and r[1] == 0xA2 for r in cip.requests)
+
+
 def test_ejector_bad_reading_raises_instead_of_zero():
     """The old driver returned 0 on an empty reply, which reads as 'no item'."""
     class Empty:

@@ -4,13 +4,16 @@
    wall on. At the approach the scene swaps the wall at the pod face for the pod's bins
    (scene_bin): the side walls stay, and the bin floors, dividers and lips are modelled.
 2. Vacuum on, then move in along the tool axis until the cup feels contact.
-3. Haptic search: until aligned or sealed, or the time runs out: back off a little, then move
+3. Haptic search: until the vacuum seals, or the time runs out: back off a little, then move
    by the cup's proposed pose change, stopping if the vacuum seals. Steps alternate on purpose:
    a turn (tilt to level the contact), then a move (sideways towards the load), and so on.
 4. Lift, back straight out until the tool is clear of the pod-face wall, put the wall back,
    then a planned move to hide, and blow off.
 
 Changes from the old code, on purpose:
+- The search ends only on a vacuum seal (or the time limit), not when the cap reads aligned
+  (user 2026-11-12): an even press doesn't mean the vacuum caught. Judging seal affordance from
+  the capacitance is for a learned model later.
 - A proposal is used only if it was made after the last move. The old GetHapticSearchPose
   returned an empty pose at once, before any proposal came.
 - No contact on the way in ends the pick ("no_contact") instead of searching in free air.
@@ -85,9 +88,6 @@ def pick(robot, cup, cfg, log=print):
         cup.wait_for_sample(after=asked)
         if cup.sealed():
             ended = "sealed"
-            break
-        if cup.aligned():
-            ended = "aligned"
             break
         proposal = cup.proposal(kind, newer_than=asked, wait_s=0.5)
         if proposal is None and kind == "turn":

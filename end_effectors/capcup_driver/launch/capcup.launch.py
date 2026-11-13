@@ -25,7 +25,7 @@ def setup(context):
         ]
     if part in ("control", "all"):
         nodes.append(Node(package="capcup_driver", executable="vacuum", name="vacuum",
-                          parameters=[{"ip": site["ejector_ip"], "seal_mbar": float(site["seal_mbar"]),
+                          parameters=[{"ip": site["ejector_ip"], "seal_mbar": -1.0 if site["seal_mbar"] == "device" else float(site["seal_mbar"]),
                                        "fake": get("fake_vacuum") == "true",
                                        "fake_item_topic": get("fake_item_topic")}]))
     if not nodes:
