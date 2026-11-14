@@ -1,0 +1,14 @@
+# Pilz industrial motion planner (MoveIt's own), used for repeatable planned moves (2026-11-13):
+# PTP = every joint moves together on a straight line in joint space, the same path every time
+# (OMPL samples a new random path each plan). Pilz checks the result for collisions and fails
+# instead of detouring. It times the trajectory itself (trapezoidal, joint_limits.yaml).
+planning_plugins: [pilz_industrial_motion_planner/CommandPlanner]
+request_adapters:
+  - default_planning_request_adapters/ResolveConstraintFrames
+  - default_planning_request_adapters/ValidateWorkspaceBounds
+  - default_planning_request_adapters/CheckStartStateBounds
+  - default_planning_request_adapters/CheckStartStateCollision
+response_adapters:
+  - default_planning_response_adapters/ValidateSolution
+  - default_planning_response_adapters/DisplayMotionPath
+default_planner_config: PTP

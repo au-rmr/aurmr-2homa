@@ -11,10 +11,6 @@ frames:
 limits:
   limits_full: {x_max: 0.95, y_min: -1.175, y_max: 1.175}
   limits_drop_hide: {x_max: 0.95, y_min: -0.975, y_max: 0.975}
-  # Leaving the pod with a held item (user 2026-11-12): the pod-face wall moved out by the
-  # deepest item the pod can hold, its bin depth (pod_bins depth 0.150), so a planned move can't
-  # swing the item back into the pod. The cap_cup pick at 2H dropped its item on the pod face.
-  limits_drop_hide_held: {x_max: 0.80, y_min: -0.975, y_max: 0.975}
 
 objects:
   # Measured 2026-11-06: top 0.725 above floor, 0.61 x 1.52, far edge 0.13 from the pod face,

@@ -18,11 +18,13 @@ from action_msgs.msg import GoalStatus
 from ament_index_python.packages import get_package_share_directory as share
 from bondpy.bondpy import Bond
 from geometry_msgs.msg import Pose, PoseStamped
-from moveit_msgs.msg import (BoundingVolume, CollisionObject, Constraints, JointConstraint,
+from moveit_msgs.msg import (AttachedCollisionObject, BoundingVolume, CollisionObject, Constraints, JointConstraint,
                              MoveItErrorCodes, OrientationConstraint, PlanningScene,
                              PlanningSceneComponents, PositionConstraint)
+from moveit_msgs.msg import RobotState as RobotStateMsg
 from moveit_msgs.srv import (ApplyPlanningScene, GetCartesianPath, GetMotionPlan,
-                             GetPlanningScene, GetPositionFK)
+                             GetPlanningScene, GetPositionFK, GetStateValidity)
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
@@ -112,15 +114,16 @@ class Scene:
 
     def use(self, *names):
         """Replaces the whole scene with these scenes and objects from the site's workcell.
-        Removes every workcell object MoveIt holds that isn't wanted, also ones an earlier process
-        placed (a demo run's last scene stayed in the world for the next run, 2026-11-12)."""
+        Removes every world object MoveIt holds, also ones an earlier process placed (a demo run's
+        last scene stayed in the world for the next run, 2026-11-12) and ones the workcell no
+        longer names (an object deleted from workcell.yaml blocked the next plan, 2026-11-13).
+        An item attached to the tool (hold) is not a world object and stays."""
         request = ApplyPlanningScene.Request(scene=PlanningScene(is_diff=True))
         wanted = W.object_names(self._robot.workcell, names)
         ask = GetPlanningScene.Request()
         ask.components.components = PlanningSceneComponents.WORLD_OBJECT_NAMES
         present = self._robot._wait(self._robot._get_scene.call_async(ask))
-        known = self._robot.workcell["objects"]
-        for name in sorted({o.id for o in present.scene.world.collision_objects if o.id in known}):
+        for name in sorted({o.id for o in present.scene.world.collision_objects}):
             request.scene.world.collision_objects.append(
                 CollisionObject(id=name, operation=CollisionObject.REMOVE))
         for name in wanted:
@@ -129,6 +132,52 @@ class Scene:
         if not self._robot._wait(self._robot._apply_scene.call_async(request)).success:
             raise RobotError(f"MoveIt refused scene {names}")
         self._placed = wanted
+
+    HELD = "held_item"
+
+    def hold(self, size, start=0.0):
+        """Attaches a box to the tool's TCP as the item it may be holding (user 2026-11-13), so
+        MoveIt keeps the item, not just the tool, clear of every obstacle in any orientation.
+        size: (x, y, z) in the TCP frame, z along the tool axis; the box runs from start (m, may
+        be negative: a sealed suction cup pulls the item back) to start + size[2]. The tool's
+        own links (tool.yaml links) may touch it. Stays until release(), also across scene.use."""
+        co = CollisionObject(id=self.HELD, operation=CollisionObject.ADD)
+        co.header.frame_id = self._robot.tcp
+        co.primitives.append(SolidPrimitive(type=SolidPrimitive.BOX,
+                                            dimensions=[float(v) for v in size]))
+        pose = Pose()
+        pose.position.z = float(start + size[2] / 2)
+        pose.orientation.w = 1.0
+        co.primitive_poses.append(pose)
+        held = AttachedCollisionObject(link_name=self._robot.tcp, object=co,
+                                       touch_links=list(self._robot.tool["links"]))
+        request = ApplyPlanningScene.Request(scene=PlanningScene(is_diff=True))
+        request.scene.robot_state.is_diff = True
+        request.scene.robot_state.attached_collision_objects.append(held)
+        if not self._robot._wait(self._robot._apply_scene.call_async(request)).success:
+            raise RobotError(f"MoveIt refused the held item {size}")
+
+    def release(self):
+        """Removes the held item, also one an earlier process attached and never released.
+        MoveIt puts a detached object into the world, so it is removed from there too."""
+        ask = GetPlanningScene.Request()
+        ask.components.components = (PlanningSceneComponents.ROBOT_STATE_ATTACHED_OBJECTS |
+                                     PlanningSceneComponents.WORLD_OBJECT_NAMES)
+        present = self._robot._wait(self._robot._get_scene.call_async(ask)).scene
+        attached = any(a.object.id == self.HELD for a in present.robot_state.attached_collision_objects)
+        in_world = any(o.id == self.HELD for o in present.world.collision_objects)
+        if not attached and not in_world:
+            return
+        request = ApplyPlanningScene.Request(scene=PlanningScene(is_diff=True))
+        if attached:
+            request.scene.robot_state.is_diff = True
+            request.scene.robot_state.attached_collision_objects.append(AttachedCollisionObject(
+                link_name=self._robot.tcp,
+                object=CollisionObject(id=self.HELD, operation=CollisionObject.REMOVE)))
+        request.scene.world.collision_objects.append(
+            CollisionObject(id=self.HELD, operation=CollisionObject.REMOVE))
+        if not self._robot._wait(self._robot._apply_scene.call_async(request)).success:
+            raise RobotError("MoveIt refused to release the held item")
 
 
 class Robot:
@@ -161,6 +210,7 @@ class Robot:
         self._fk = self._node.create_client(GetPositionFK, "compute_fk")
         self._apply_scene = self._node.create_client(ApplyPlanningScene, "apply_planning_scene")
         self._get_scene = self._node.create_client(GetPlanningScene, "get_planning_scene")
+        self._validity = self._node.create_client(GetStateValidity, "check_state_validity")
         self._connect = self._node.create_client(Connect, "motion_server/connect")
         self._execute = ActionClient(self._node, ExecuteTrajectory, "motion_server/execute")
         self._executor = MultiThreadedExecutor()
@@ -243,20 +293,52 @@ class Robot:
 
     # --- Moves ---------------------------------------------------------------------------------
     def go_named(self, name, speed=DEFAULT_PLANNED_SPEED, tip_speed=DEFAULT_PLANNED_TIP_SPEED,
-                 angular_speed=DEFAULT_PLANNED_ANGULAR_SPEED):
-        return self.go_joints(self.workcell["named_poses"][name], speed, tip_speed, angular_speed)
+                 angular_speed=DEFAULT_PLANNED_ANGULAR_SPEED, planner="ompl"):
+        return self.go_joints(self.workcell["named_poses"][name], speed, tip_speed, angular_speed,
+                              planner)
 
     def go_joints(self, values, speed=DEFAULT_PLANNED_SPEED, tip_speed=DEFAULT_PLANNED_TIP_SPEED,
-                  angular_speed=DEFAULT_PLANNED_ANGULAR_SPEED):
+                  angular_speed=DEFAULT_PLANNED_ANGULAR_SPEED, planner="ompl"):
         """Planned move to joint values, in ARM_JOINTS order or as a {joint: value} dict.
-        speed scales the joint limits; tip_speed (m/s) and angular_speed (rad/s) cap the tool."""
+        speed scales the joint limits; tip_speed (m/s) and angular_speed (rad/s) cap the tool.
+        planner: "ompl" (sampled path, finds a way round obstacles, differs every plan) or "ptp"
+        (Pilz: straight line in joint space, the same path every time, fails if it collides)."""
         if isinstance(values, dict):
             values = [values[n] for n in ARM_JOINTS]
         goal = Constraints(joint_constraints=[
             JointConstraint(joint_name=n, position=float(v), tolerance_above=0.001,
                             tolerance_below=0.001, weight=1.0)
             for n, v in zip(ARM_JOINTS, values, strict=True)])
-        return self._run(self._planned(goal, speed, tip_speed, angular_speed))
+        return self._run(self._planned(goal, speed, tip_speed, angular_speed, planner))
+
+    def plan_joints(self, values, speed=DEFAULT_PLANNED_SPEED, tip_speed=DEFAULT_PLANNED_TIP_SPEED,
+                    angular_speed=DEFAULT_PLANNED_ANGULAR_SPEED, planner="ompl"):
+        """Plans as go_joints does and returns the trajectory without moving (to keep a good path:
+        run it with run_path, save it with path_to_dict)."""
+        if isinstance(values, dict):
+            values = [values[n] for n in ARM_JOINTS]
+        goal = Constraints(joint_constraints=[
+            JointConstraint(joint_name=n, position=float(v), tolerance_above=0.001,
+                            tolerance_below=0.001, weight=1.0)
+            for n, v in zip(ARM_JOINTS, values, strict=True)])
+        return self._planned(goal, speed, tip_speed, angular_speed, planner)
+
+    def run_path(self, trajectory):
+        """Runs a stored joint trajectory (a recorded path, 2026-11-13). Every point is checked
+        first against the current scene, a held item included; raises PlanningFailed if one
+        collides. motion_server refuses it unless the arm is at its first point."""
+        if not self._validity.wait_for_service(timeout_sec=TIMEOUT_S):
+            raise RobotError("check_state_validity is not available")
+        for i, point in enumerate(trajectory.points):
+            state = RobotStateMsg(is_diff=True)
+            state.joint_state.name = list(trajectory.joint_names)
+            state.joint_state.position = list(point.positions)
+            answer = self._wait(self._validity.call_async(
+                GetStateValidity.Request(robot_state=state, group_name=GROUP)))
+            if not answer.valid:
+                pairs = sorted({f"{c.contact_body_1}-{c.contact_body_2}" for c in answer.contacts})
+                raise PlanningFailed(f"stored path point {i} of {len(trajectory.points)} collides: {pairs}")
+        return self._run(trajectory)
 
     def plan_to(self, xyz, quat, speed=DEFAULT_PLANNED_SPEED, position_tolerance=0.005,
                 angle_tolerance=0.02, link=None, tip_speed=DEFAULT_PLANNED_TIP_SPEED,
@@ -392,17 +474,19 @@ class Robot:
             return min(MAX_SIGNAL_SPEED, float(spec["max_speed"]))
         return MAX_SIGNAL_SPEED
 
-    def _planned(self, goal, speed, tip_speed, angular_speed):
+    def _planned(self, goal, speed, tip_speed, angular_speed, planner="ompl"):
         if not math.isfinite(tip_speed) or not 0 < tip_speed <= MAX_PLANNED_TIP_SPEED:
             raise ValueError(f"tip_speed is in m/s, above 0 up to {MAX_PLANNED_TIP_SPEED}, got {tip_speed}")
         if not math.isfinite(angular_speed) or not 0 < angular_speed <= MAX_ANGULAR_SPEED:
             raise ValueError(f"angular_speed is in rad/s, above 0 up to {MAX_ANGULAR_SPEED}")
-        trajectory = self._plan_to_constraints(goal, speed)
+        trajectory = self._plan_to_constraints(goal, speed, planner)
         return self._limit_tip_speed(trajectory, tip_speed, angular_speed)
 
-    def _plan_to_constraints(self, goal, speed):
+    def _plan_to_constraints(self, goal, speed, planner="ompl"):
         if not math.isfinite(speed) or not 0 < speed <= 1:
             raise ValueError(f"speed is a fraction of full speed, above 0 up to 1, got {speed}")
+        if planner not in ("ompl", "ptp"):
+            raise ValueError(f"planner is ompl or ptp, got {planner}")
         self._stop_asked = False
         self._check_guard()
         request = GetMotionPlan.Request()
@@ -414,6 +498,8 @@ class Robot:
         r.max_acceleration_scaling_factor = float(speed)
         r.start_state.is_diff = True
         r.goal_constraints = [goal]
+        if planner == "ptp":
+            r.pipeline_id, r.planner_id, r.num_planning_attempts = "pilz", "PTP", 1
         for attempt in range(PLAN_RETRIES + 1):
             answer = self._wait(self._plan.call_async(request)).motion_plan_response
             code = answer.error_code.val
@@ -502,3 +588,35 @@ class Robot:
         if not done.wait(timeout):
             raise RobotError("timed out waiting for the robot stack")
         return future.result()
+
+
+def path_to_dict(trajectory):
+    """A joint trajectory as plain data, for a YAML file."""
+    return {"joint_names": list(trajectory.joint_names),
+            "points": [{"t": p.time_from_start.sec + p.time_from_start.nanosec * 1e-9,
+                        "q": [float(v) for v in p.positions],
+                        "v": [float(v) for v in p.velocities],
+                        "a": [float(v) for v in p.accelerations]} for p in trajectory.points]}
+
+
+def path_from_dict(data, reverse=False):
+    """The trajectory path_to_dict saved; reverse=True runs it backwards (same timing)."""
+    pts = data["points"]
+    end = pts[-1]["t"]
+    seq = list(reversed(pts)) if reverse else pts
+    out = JointTrajectory(joint_names=list(data["joint_names"]))
+    for p in seq:
+        t = end - p["t"] if reverse else p["t"]
+        point = JointTrajectoryPoint(positions=list(p["q"]))
+        if p.get("v"):
+            point.velocities = [-v for v in p["v"]] if reverse else list(p["v"])
+        if p.get("a"):
+            point.accelerations = list(p["a"])
+        point.time_from_start = Duration(seconds=t).to_msg()
+        out.points.append(point)
+    # At rest at both ends: the controller refuses a last point with any velocity, and a planned
+    # path's first point carries a tiny one (2e-4 rad/s), which becomes the last when reversed.
+    for point in (out.points[0], out.points[-1]):
+        point.velocities = [0.0] * len(point.positions) if point.velocities else []
+        point.accelerations = [0.0] * len(point.positions) if point.accelerations else []
+    return out

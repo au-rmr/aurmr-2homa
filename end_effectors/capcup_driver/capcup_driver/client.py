@@ -12,6 +12,7 @@ from geometry_msgs.msg import PoseStamped
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import qos_profile_sensor_data
 from std_msgs.msg import Bool
+from std_srvs.srv import Trigger
 
 # How old a reading may be. contact comes once per cap board sample (every 0.171 s, S6
 # 2026-11-12: the code had assumed 50 Hz and 0.2 s left 29 ms); alignment and seal come at 50 Hz.
@@ -43,6 +44,7 @@ class CapCup:
             self._node.create_subscription(PoseStamped, f"/haptic_search/proposed_{kind}",
                                            lambda m, k=kind: self._on_proposal(k, m), 1)
         self._vacuum = self._node.create_client(SetVacuum, "/vacuum/set")
+        self._rezero = self._node.create_client(Trigger, "/haptic_search/rezero")
         self._executor = MultiThreadedExecutor()
         self._executor.add_node(self._node)
         threading.Thread(target=self._executor.spin, daemon=True).start()
@@ -95,6 +97,22 @@ class CapCup:
 
     def sealed(self):
         return self._fresh("sealed")
+
+    def rezero(self, samples=4):
+        """The search takes a new in-air zero (haptic_search ~/rezero averages its next 3 samples);
+        returns once `samples` cap samples have come after the call, so it has been applied. Call
+        with the cup in free air, in the pose it will touch from."""
+        if not self._rezero.wait_for_service(timeout_sec=self._timeout):
+            raise ToolError("haptic_search rezero service is not available")
+        asked = self.now()
+        future = self._rezero.call_async(Trigger.Request())
+        done = threading.Event()
+        future.add_done_callback(lambda _: done.set())
+        if not done.wait(self._timeout) or not future.result().success:
+            raise ToolError("haptic_search did not re-zero")
+        for _ in range(samples):
+            self.wait_for_sample(after=asked)
+            asked = self.now()
 
     def wait_ready(self):
         """Waits until every reading is fresh: drivers up, board streaming."""

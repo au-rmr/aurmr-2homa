@@ -151,3 +151,41 @@ def test_turn_proposal_levels_the_cup(tilt_deg, axis):
     after = math.degrees(math.acos(min(1.0, abs(turned_axis @ normal))))
     print(f"tilt {tilt_deg} about {axis}: {before:.1f} -> {after:.1f} deg")
     assert after < 0.5 * before
+
+
+def test_gains_even_out_an_even_press():
+    """An even 4 mm press read through the site's uneven gains: without them the search sees a
+    tilt and a sideways pull; with them (S6, 2026-11-13) the press reads level and centred."""
+    import numpy as np
+    from capcup_driver import calibration as cal
+    gains = np.asarray(cal.load(os.path.join(HERE, "..", "..", "sites", "uw_lab", "tools",
+                                             "capcup_calibration.yaml"))["gains"])
+    raw = 3_000_000 + gains * 40_000
+    out = {}
+    for name, g in (("raw", None), ("gains", gains)):
+        s = HapticSearch(gains=g)
+        s.update(0.0, [3_000_000] * 8)
+        s.update(0.02, raw)
+        _, angle = s._rotation()
+        out[name] = (np.linalg.norm(s._lateral()), angle)
+    assert out["raw"][0] > 0.05 and out["raw"][1] > 1e-3
+    assert out["gains"][0] < 1e-9 and out["gains"][1] < 1e-9
+    with pytest.raises(ValueError):
+        HapticSearch(gains=[1.0] * 7)
+    with pytest.raises(ValueError):
+        HapticSearch(gains=[1.0] * 7 + [0.0])
+
+
+def test_rezero_takes_the_new_in_air_values():
+    """S6 2026-11-13: after the in-air readings shift (drift, cup orientation), a stale zero reads
+    as uneven loading; rezero() with the new in-air samples brings it back to an even zero."""
+    import numpy as np
+    s = HapticSearch()
+    s.update(0.0, [3_000_000] * 8)
+    shifted = [3_000_000 + 20_000 * k for k in range(8)]   # in air, readings moved unevenly
+    s.update(0.2, shifted)
+    assert np.linalg.norm(s._lateral()) > 0.05              # stale zero: a sideways pull
+    s.rezero([shifted, shifted, shifted])
+    assert s.step() is None                                 # nothing until the next sample
+    s.update(0.4, [v + 40_000 for v in shifted])            # an even press from the new zero
+    assert np.linalg.norm(s._lateral()) < 1e-9

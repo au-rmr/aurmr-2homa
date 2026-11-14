@@ -2,6 +2,7 @@
 name: capcup
 urdf: urdf/tool.xacro
 tcp_link: gripper_equilibrium_grasp
+links: [coupling, capacitive_cup, gripper_equilibrium_grasp, cup_aluminium_end]   # the tool's own links: a held item may touch them
 mass_kg: 0.205  # user, 2026-11-09
 cog_m: [0.0, 0.0, 0.1067]   # from arm_tool0; middle of the cup body (0.0169 + 0.1795/2; lengths user 2026-11-10, was 0.1054)
 capabilities: [contact, suction]
@@ -12,5 +13,5 @@ client: capcup_driver.client:CapCup   # built by aurmr_skills.load_tool(robot)
 # contact comes once per cap board sample, every 0.171 s (S6, 2026-11-12): 0.5 s = ~3 samples;
 # at 0.01 m/s the tip moves 1.7 mm per sample and at most 5 mm before a dead board stops it.
 stop_signals:
-  contact: {topic: /cap_contact, stale_s: 0.5, max_speed: 0.01}
+  contact: {topic: /cap_contact, stale_s: 0.5, max_speed: 0.02}   # 0.02 for the cap_cup approach (2026-11-13)
   seal: /vacuum_seal   # 50 Hz from the ejector driver

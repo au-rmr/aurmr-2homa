@@ -5,6 +5,12 @@ taken from the first samples and again with "Re-zero" (the old "Reset"). With a 
 (capcup_calibration.yaml) a switch shows them gain-corrected or as deflection in mm; the
 deflection is not clamped (below contact reads negative), dotted lines mark 0 mm and the top of
 the calibrated range.
+
+Force (2026-11-13): the arm's wrist force (/force_torque_sensor_broadcaster/wrench, the copy
+motion_server publishes on the shared domain), as the change from its value at the last re-zero:
+x, y, z and the size of the change, with the cap_cup touch stop (30 N) dashed. motion_server
+measures its stops from each move's start instead, so this shows drift that a stop would not see
+until the next move. Thinned to 50 Hz.
 """
 import collections
 import math
@@ -22,6 +28,8 @@ ZERO_SAMPLES = 10
 # for "too little" and on any channel for "too much".
 THRESH_LO, THRESH_HI = 2e4 * 10, 10e4 * 10
 MODES = ("raw counts", "gain-corrected counts", "deflection (mm)")
+FORCE_STOP_N = 30.0     # cap_cup touch_force_n (sites/uw_lab/demos/cap_cup.yaml)
+FORCE_EVERY_S = 0.02    # keep one wrench sample per 20 ms (it comes at 500 Hz)
 
 
 class Ring(QtWidgets.QWidget):
@@ -75,6 +83,8 @@ class Dashboard(QtWidgets.QWidget):
         self.t, self.y = collections.deque(), collections.deque()
         self.zero, self.zero_buf, self.t0 = None, [], time.monotonic()
         self.contact, self.last_rx = None, None
+        self.ft, self.f = collections.deque(), collections.deque()
+        self.f_zero, self.f_last = None, 0.0
 
         self.mode = QtWidgets.QComboBox()
         self.mode.addItems(MODES if self.est else MODES[:1])
@@ -130,12 +140,21 @@ class Dashboard(QtWidgets.QWidget):
                     plot.addItem(line)
                     self.range_lines.append(line)
         self.combined, self.total = combined, total
+        force = pg.PlotWidget(title="Wrist force, change since re-zero (N)")
+        force.showGrid(x=True, y=True)
+        force.addLegend(offset=(5, 5))
+        self.force_curves = [force.plot(pen=pg.mkPen(c, width=w), name=n) for c, w, n in
+                             (("r", 1, "x"), ("g", 1, "y"), ("b", 1, "z"), ("k", 2, "|change|"))]
+        force.addItem(pg.InfiniteLine(FORCE_STOP_N, angle=0, pen=pg.mkPen("r", style=QtCore.Qt.DashLine)))
+        force.setXLink(self.ch_plots[0])
+        self.force = force
 
         grid = QtWidgets.QGridLayout()
         grid.addWidget(stacked, 0, 0, 2, 1)
         grid.addWidget(combined, 0, 1)
         grid.addWidget(total, 0, 2)
-        grid.addWidget(self.ring, 1, 1, 1, 2)
+        grid.addWidget(self.ring, 1, 1)
+        grid.addWidget(self.force, 1, 2)
         grid.setColumnStretch(0, 2)
         grid.setColumnStretch(1, 2)
         grid.setColumnStretch(2, 2)
@@ -149,6 +168,25 @@ class Dashboard(QtWidgets.QWidget):
         self.zero, self.zero_buf = None, []
         self.t.clear()
         self.y.clear()
+        self.f_zero = None
+        self.ft.clear()
+        self.f.clear()
+
+    def on_wrench(self, xyz):
+        now = time.monotonic()
+        if now - self.f_last < FORCE_EVERY_S:
+            return
+        self.f_last = now
+        v = np.asarray(xyz, dtype=float)
+        if not np.all(np.isfinite(v)):
+            return
+        if self.f_zero is None:
+            self.f_zero = v
+        self.ft.append(now - self.t0)
+        self.f.append(v - self.f_zero)
+        while self.ft and self.ft[-1] - self.ft[0] > WINDOW_S:
+            self.ft.popleft()
+            self.f.popleft()
 
     def on_cap(self, values):
         v = np.asarray(values, dtype=float)
@@ -178,6 +216,11 @@ class Dashboard(QtWidgets.QWidget):
         self.status.setText(("no data yet" if age is None else
                              f"last sample {age:.1f} s ago" + ("  STALE" if age > 1.0 else ""))
                             + f"  contact: {self.contact}" + zeroing)
+        if self.f:
+            ft, f = np.asarray(self.ft), np.asarray(self.f)
+            for k in range(3):
+                self.force_curves[k].setData(ft, f[:, k])
+            self.force_curves[3].setData(ft, np.linalg.norm(f, axis=1))
         if not self.y:
             return
         t = np.asarray(self.t)
@@ -208,6 +251,7 @@ def main():
     import rclpy
     from capcup_interfaces.msg import CapData
     from rclpy.qos import qos_profile_sensor_data
+    from geometry_msgs.msg import WrenchStamped
     from std_msgs.msg import Bool
 
     ap = argparse.ArgumentParser()
@@ -222,6 +266,10 @@ def main():
     node.create_subscription(CapData, "/cap_data", lambda m: win.on_cap(m.values), qos_profile_sensor_data)
     node.create_subscription(Bool, "/cap_contact", lambda m: setattr(win, "contact", m.data),
                              qos_profile_sensor_data)
+    node.create_subscription(
+        WrenchStamped, "/force_torque_sensor_broadcaster/wrench",
+        lambda m: win.on_wrench((m.wrench.force.x, m.wrench.force.y, m.wrench.force.z)),
+        qos_profile_sensor_data)
     spin = QtCore.QTimer()
     spin.timeout.connect(lambda: rclpy.spin_once(node, timeout_sec=0))
     spin.start(10)

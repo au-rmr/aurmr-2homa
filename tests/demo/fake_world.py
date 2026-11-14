@@ -38,6 +38,25 @@ ANGLES = np.linspace(0, 2 * np.pi, 8, endpoint=False) + np.pi / 8
 BASE = np.array([3_000_000 + 100_000 * k for k in range(8)], dtype=float)
 
 
+def site_gains():
+    """The real cup's per-channel gains when the site's search uses them (capcup.yaml
+    search_gains), so the fake reads as unevenly as the real cup and the search's division
+    evens it out again. Ones otherwise. Site dir: AURMR_SITE_DIR, default /repo/sites/uw_lab."""
+    import yaml
+    site_dir = os.environ.get("AURMR_SITE_DIR", "/repo/sites/uw_lab")
+    try:
+        with open(os.path.join(site_dir, "tools", "capcup.yaml")) as f:
+            if not yaml.safe_load(f).get("search_gains", False):
+                return np.ones(8)
+        with open(os.path.join(site_dir, "tools", "capcup_calibration.yaml")) as f:
+            return np.asarray(yaml.safe_load(f)["gains"], dtype=float)
+    except FileNotFoundError:
+        return np.ones(8)
+
+
+GAINS = site_gains()
+
+
 def rotation(q):
     x, y, z, w = q
     return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
@@ -91,7 +110,7 @@ def main():
         now = time.monotonic()
         if now - state["sent"] >= BOARD_PERIOD_S:
             state["sent"] = now
-            counts = BASE + COUNTS_PER_M * depth + rng.integers(-300, 300, 8)
+            counts = BASE + GAINS * COUNTS_PER_M * depth + rng.integers(-300, 300, 8)
             ms = int((now - t0) * 1000) + 1_000_000
             sock.sendto(struct.pack("<Q8l", ms, *[int(c) for c in counts]), ("127.0.0.1", 12345))
         held = state["held"] or bool(np.all(depth > 0.001))

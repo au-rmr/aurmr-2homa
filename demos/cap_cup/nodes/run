@@ -19,7 +19,7 @@ def main():
     p.add_argument("--site-dir", default=os.environ.get("AURMR_SITE_DIR", "/repo/sites/uw_lab"))
     args = p.parse_args()
     with open(os.path.join(args.site_dir, "demos", "cap_cup.yaml")) as f:
-        cfg = Config(**yaml.safe_load(f))
+        cfg = Config(**yaml.safe_load(f), site_dir=args.site_dir)
     workcell = os.path.join(args.site_dir, "workcell.yaml")
     with Robot.connect("capcup", FORCE_LIMIT_N, workcell) as robot, \
             load_tool(robot, needs=["contact", "suction"]) as cup:

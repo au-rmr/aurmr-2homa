@@ -21,7 +21,9 @@ def setup(context):
             Node(package="capcup_driver", executable="cap_bridge",
                  parameters=[{"port": site["cap_board_port"]}]),
             Node(package="capcup_driver", executable="contact_detector"),
-            Node(package="capcup_driver", executable="haptic_search"),
+            Node(package="capcup_driver", executable="haptic_search",
+                 parameters=[{"calibration": os.path.join(get("site_dir"), "tools", "capcup_calibration.yaml")
+                              if site.get("search_gains", False) else ""}]),
         ]
     if part in ("control", "all"):
         nodes.append(Node(package="capcup_driver", executable="vacuum", name="vacuum",

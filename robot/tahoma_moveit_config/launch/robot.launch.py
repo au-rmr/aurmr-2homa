@@ -77,9 +77,10 @@ def setup(context):
                                   {"robot_description_semantic": robot_semantic(site, tool),
                                    "robot_description_kinematics": config("kinematics.yaml"),
                                    "robot_description_planning": config("joint_limits.yaml"),
-                                   "planning_pipelines": ["ompl"],
+                                   "planning_pipelines": ["ompl", "pilz"],
                                    "default_planning_pipeline": "ompl",
                                    "ompl": config("ompl_planning.yaml"),
+                                   "pilz": config("pilz_planning.yaml"),
                                    "publish_robot_description_semantic": True}])
     # MoveIt gets no controllers on any hardware: it plans, motion_server executes. With the
     # private domain it couldn't reach them anyway.

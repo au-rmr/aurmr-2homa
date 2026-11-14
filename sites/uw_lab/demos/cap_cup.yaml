@@ -1,26 +1,44 @@
 # cap_cup demo at the UW lab. Values from the old ROS 1 hard_code_pose script.
 scene_hide: [limits_drop_hide, table_down, pod_partial]
-# After the retreat, holding (maybe) an item up to a bin deep: the pod-face wall 15 cm further out.
-scene_hide_held: [limits_drop_hide_held, table_down, pod_partial]
 scene_work: [limits_full, table_down, pod_partial, pod_bins]
 # Inside the bin: the pod-face wall (limits_full_x_max) is off, the side walls stay, the rigid
 # pod parts are true size, and bin 2H's canvas may be pushed 2 cm (pod_bins_soft_2h, no lip;
 # user 2026-11-10). The old demo checked nothing on these moves.
 scene_bin: [limits_full_y_min, limits_full_y_max, table_down, pod_partial, pod_bins_soft_2h]
 pod_face_limit: limits_full
+# The bin picked from. A sealed item is modelled as a box as large as this bin, attached to the cup
+# for the move to hide (user 2026-11-13; replaced the pod-face wall moved out for the held item).
+pod: pod_bins
+pick_bin: 2h
 # Bin 2H, the old default_pose. It was given for arm_tool0, the old planning tip.
 approach_link: arm_tool0
 approach_xyz: [0.730, 0.035, 1.580]
-approach_quat: [0.7071067811865475, -5.551115123125783e-17, 0.7071067811865475, 1.6653345369377348e-16]
+# Turned -90 deg about the cup axis from the old [0.7071, 0, 0.7071, 0] (user 2026-11-13): the old roll put
+# wrist 3 at ~1.6 rad at the approach vs 0 at drop_hide, twisting the hose round the wrist (30-49 N on the
+# force sensor). The cup is round and the search works in the tool frame, so the roll is free; wrist 3 is now ~0.
+approach_quat: [0.5, 0.5, 0.5, 0.5]
+# The approach as joints (pan, lift, elbow, wrist 1-3), IK for the pose above seeded with the real arm's
+# branch (2026-11-13). A pose goal let MoveIt pick any IK branch: the mock landed elbow +2.11 vs the real
+# arm's -2.29, and from that branch the straight retreat folds wrist 2 into the upper arm (D25). Fixed joints:
+# the same branch, path to hide and hose twist every pick. tests/model checks they reach the pose.
+approach_joints: [1.0478, 0.4677, -2.2039, -1.4071, -1.0413, 0.0021]
+# The approach pulled back 0.154 m along the approach (tip at x 0.78, where the retreat ends), same
+# branch (IK seeded with approach_joints, 2026-11-13). The recorded path runs drop_hide <-> here.
+pre_approach_joints: [0.6885, 0.1658, -2.6579, -0.6471, -0.684, -0.0037]
+# Recorded with tests/arm/record_path.py and kept by the user (2026-11-13): drop_hide -> pre_approach,
+# run reversed on the way back. Missing file = plan every time.
+path_file: cap_cup_paths/hide_to_pre_approach.yaml
 approach_m: 0.05          # old MOVE_FORWARD
-touch_force_n: 15.0       # backup force stop while touching; the old demo had none here
+touch_force_n: 30.0       # backup force stop while touching; the old demo had none here. 30, not 15 (user 2026-11-13): the hose's pull changes ~15 N over a few cm of reach at bin 2H, which tripped 15 N in free air (s6/l5_force_01*.csv)
 search_timeout_s: 20.0    # old CheckCapAlignment timeout
 clearance_m: 0.005        # old RETRACT_FOR_CLEARANCE and GetHapticSearchPose clearance
 lift_m: 0.03              # old LIFT_OBJ, in base_link
-retreat_clear_m: 0.02     # back out until the tool tip is 2 cm in front of the pod-face wall pushed out by held_depth_m.
+retreat_clear_m: 0.02     # back out until a held item as deep as the bin (pod_bins depth 0.150) ends 2 cm in front of the pod face.
                           # 2 cm, not 5 (user 2026-11-12): straight back out of 2H the arm folds into itself (wrist 1 vs
                           # upper arm) at tip x ~0.75; this stops at 0.78. Contact with the flexible face/flaps is fine,
                           # and a sealed suction cup retracts, so the item sits up to ~8 mm behind the modelled tip.
-held_depth_m: 0.15        # worst-case held item: as deep as a bin (pod_bins depth 0.150); user 2026-11-12, after an item caught on the pod
 straight_speed: 0.01      # m/s
+approach_speed: 0.02      # m/s, the contact-stopped move in only (user 2026-11-13); the cap board's 0.171 s period = 3.4 mm per sample at slider 100 %
+settle_s: 1.5             # pause at the approach pose (vacuum on) before the move in: the hose's pull relaxes ~15 N over ~1 s after the planned move (L5 2026-11-13, s6/l5_force_01.csv)
 planned_speed: 0.2
+planner: ptp              # the moves to the approach and to hide: Pilz PTP, the same joint-space path every pick (user 2026-11-13, hose); falls back to ompl if it would collide

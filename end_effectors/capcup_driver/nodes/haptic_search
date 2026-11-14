@@ -11,16 +11,22 @@ on ~proposed_turn.
 Each proposal is stamped with the time of the cap sample it was computed from (the bridge's
 stamp), so a caller can wait for one from after its last move (S6, 2026-11-12). Stops
 publishing when /cap_data is older than STALE_S, so a stale proposal can't be used.
-The old node kept publishing its last numbers. Parameter: frame (the tool's TCP link).
+The old node kept publishing its last numbers. Parameters: frame (the tool's TCP link),
+calibration (capcup_calibration.yaml whose gains the search uses; "" = none, the old behaviour).
+Service ~/rezero (std_srvs/Trigger): the mean of the next REZERO_SAMPLES cap samples becomes the
+in-air zero; no proposals or alignment until then. Call it with the cup in free air.
 """
 import rclpy
 from capcup_interfaces.msg import CapData
 from geometry_msgs.msg import PoseStamped
 from rclpy.qos import qos_profile_sensor_data
 from std_msgs.msg import Bool
+from std_srvs.srv import Trigger
 
+from capcup_driver import calibration as cal
 from capcup_driver.haptic import HapticSearch
 
+REZERO_SAMPLES = 3   # ~0.5 s at the board's 5.8 Hz; one sample's noise is ~+-600 counts
 STALE_S = 0.5   # the board sends every 0.171 s (S6, 2026-11-12; 0.2 s left 29 ms)
 
 
@@ -28,13 +34,36 @@ def main():
     rclpy.init()
     node = rclpy.create_node("haptic_search")
     frame = node.declare_parameter("frame", "gripper_equilibrium_grasp").value
-    search = HapticSearch()
+    path = node.declare_parameter("calibration", "").value
+    gains = cal.load(path)["gains"] if path else None
+    search = HapticSearch(gains=gains)
+    node.get_logger().info(
+        f"gains {'from ' + path + ': ' + str(gains) if gains else 'off (raw counts)'}; thresholds "
+        f"lo {search._thresh_lo:g} (sum), hi {search._thresh_hi:g} (any channel), "
+        f"aligned {search._thresh_lo / 8:g} (every channel)")
     last, sample = [None], [None]
     turn_pub = node.create_publisher(PoseStamped, "~/proposed_turn", 1)
     move_pub = node.create_publisher(PoseStamped, "~/proposed_move", 1)
     aligned_pub = node.create_publisher(Bool, "~/alignment", 1)
 
+    rezero = {"buf": None}
+
+    def on_rezero(_, response):
+        rezero["buf"] = []
+        node.get_logger().info(f"re-zero: averaging the next {REZERO_SAMPLES} samples")
+        response.success = True
+        return response
+
+    node.create_service(Trigger, "~/rezero", on_rezero)
+
     def on_data(m):
+        if rezero["buf"] is not None:
+            rezero["buf"].append(list(m.values))
+            if len(rezero["buf"]) < REZERO_SAMPLES:
+                return
+            search.rezero(rezero["buf"])
+            rezero["buf"] = None
+            node.get_logger().info("re-zeroed")
         search.update(m.device_time_s, m.values)
         last[0] = node.get_clock().now()
         sample[0] = m.header.stamp

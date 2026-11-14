@@ -198,3 +198,72 @@ def test_soft_bin_gives_the_canvas_allowance(wc):
                       [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, lo[2] - a - t / 2],
                       [(lo[0] + hi[0]) / 2, hi[1] + a + t / 2, (lo[2] + hi[2]) / 2]):
             assert any(np.all(blo <= probe) and np.all(bhi >= probe) for blo, bhi in boxes), (b, probe)
+
+
+
+
+def test_drop_hide_clear_with_a_held_bin_sized_item(model, wc):
+    """cap_cup attaches a box as large as the bin it picked from to the cup for the planned move
+    to hide (2026-11-13). drop_hide itself must be clear with it, or every hide after a pick fails.
+    Control: a small object 10 cm past the cup tip collides only while the box is attached."""
+    import yaml
+    from moveit_msgs.msg import AttachedCollisionObject
+    site = os.path.dirname(os.environ["WORKCELL"])
+    with open(os.path.join(site, "demos", "cap_cup.yaml")) as f:
+        cfg = yaml.safe_load(f)
+    lo, hi = W.bin_box(wc, cfg["pod"], cfg["pick_bin"])
+    side, depth = max(hi[0] - lo[0], hi[2] - lo[2]), hi[1] - lo[1]
+    tcp = "gripper_equilibrium_grasp"
+    st = state(model, wc["named_poses"]["drop_hide"])
+    T = st.get_global_link_transform(tcp)
+    probe = T[:3, 3] + 0.10 * T[:3, 2]
+    ps = scene(model, wc, cfg["scene_hide"])
+    ps.current_state = st
+    ps.apply_collision_object(box("probe", *probe))
+    assert not ps.is_state_colliding(GROUP)
+    co = CollisionObject(id="held_item", operation=CollisionObject.ADD)
+    co.header.frame_id = tcp
+    co.primitives.append(SolidPrimitive(type=SolidPrimitive.BOX, dimensions=[side, side, depth]))
+    pose = Pose()
+    pose.position.z, pose.orientation.w = -0.01 + depth / 2, 1.0
+    co.primitive_poses.append(pose)
+    ps.process_attached_collision_object(AttachedCollisionObject(
+        link_name=tcp, object=co,
+        touch_links=["coupling", "capacitive_cup", "gripper_equilibrium_grasp", "cup_aluminium_end"]))
+    assert ps.is_state_colliding(GROUP)
+    ps.apply_collision_object(CollisionObject(id="probe", operation=CollisionObject.REMOVE))
+    assert not ps.is_state_colliding(GROUP)
+
+
+def test_cap_cup_approach_joints_reach_the_approach_pose(model, wc):
+    """approach_joints (a fixed IK branch) must put approach_link at approach_xyz/quat."""
+    import yaml
+    site = os.path.dirname(os.environ["WORKCELL"])
+    with open(os.path.join(site, "demos", "cap_cup.yaml")) as f:
+        cfg = yaml.safe_load(f)
+    T = state(model, cfg["approach_joints"]).get_global_link_transform(cfg["approach_link"])
+    assert np.linalg.norm(T[:3, 3] - np.array(cfg["approach_xyz"])) < 0.002
+    x, y, z, w = cfg["approach_quat"]
+    Rq = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                   [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                   [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+    angle = np.degrees(np.arccos(np.clip((np.trace(Rq.T @ T[:3, :3]) - 1) / 2, -1, 1)))
+    assert angle < 0.5
+    ps = scene(model, wc, cfg["scene_work"])
+    assert not ps.is_state_colliding(state(model, cfg["approach_joints"]), GROUP)
+
+
+def test_cap_cup_pre_approach_is_the_approach_pulled_back(model, wc):
+    """pre_approach_joints: approach_link 0.154 m back along the approach direction (-x here), same
+    orientation, collision-free in the work and hide scenes (the recorded path ends there)."""
+    import yaml
+    site = os.path.dirname(os.environ["WORKCELL"])
+    with open(os.path.join(site, "demos", "cap_cup.yaml")) as f:
+        cfg = yaml.safe_load(f)
+    A = state(model, cfg["approach_joints"]).get_global_link_transform(cfg["approach_link"])
+    P = state(model, cfg["pre_approach_joints"]).get_global_link_transform(cfg["approach_link"])
+    assert np.linalg.norm(P[:3, 3] - (A[:3, 3] - np.array([0.154, 0, 0]))) < 0.002
+    assert np.degrees(np.arccos(np.clip((np.trace(A[:3, :3].T @ P[:3, :3]) - 1) / 2, -1, 1))) < 0.5
+    for names in (cfg["scene_work"], cfg["scene_hide"]):
+        ps = scene(model, wc, names)
+        assert not ps.is_state_colliding(state(model, cfg["pre_approach_joints"]), GROUP)

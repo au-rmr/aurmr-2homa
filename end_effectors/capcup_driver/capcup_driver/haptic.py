@@ -7,6 +7,11 @@ x between channels 1 and 8, y between 2 and 3, z from the cup's base to its tip.
 Same numbers as the old code (tests/capcup compares against its recorded output), except that a
 proposal with a non-finite value is dropped instead of published: the old code published NaN
 when the contact was already level.
+
+gains (optional, capcup_calibration.yaml, S6 2026-11-13): each channel's change from its first
+(in-air) sample is divided by its gain, so an even press reads even. The gains average 1, so on
+an even press the sum thresholds keep their old meaning (thresh_lo 2e5 = ~1.7 mm mean
+deflection on the calibration curve). Without gains the numbers are the old code's.
 """
 import math
 
@@ -49,7 +54,12 @@ def quaternion_from_matrix(matrix):
 
 class HapticSearch:
     def __init__(self, num_sensors=8, points=None, thresh_hi=10e4 * 10, thresh_lo=2e4 * 10,
-                 lat_step=0.02, lon_step=0.005, alpha=0.7, thresh_alignment=1e4):
+                 lat_step=0.02, lon_step=0.005, alpha=0.7, thresh_alignment=1e4, gains=None):
+        if gains is not None:
+            gains = np.asarray(gains, dtype=float)
+            if gains.shape != (num_sensors,) or not np.all(np.isfinite(gains)) or np.any(gains <= 0):
+                raise ValueError(f"gains must be {num_sensors} positive numbers, got {gains}")
+        self._gains = gains
         angles = np.linspace(0, 2 * np.pi, num_sensors, endpoint=False) + np.pi / num_sensors
         self._coords = (np.column_stack([np.cos(angles), np.sin(angles)])
                         if points is None else points)
@@ -67,8 +77,17 @@ class HapticSearch:
 
     def update(self, t, values):
         data = proc.apply_process_stack((t, np.array(values, dtype=float)), self._stack)
-        self._cap = data[1]
+        self._cap = data[1] if self._gains is None else data[1] / self._gains
         _, self._var = self._variance(data)
+
+    def rezero(self, values_list):
+        """New in-air zero from these raw samples (their mean), e.g. with the cup in free air in
+        front of the bin just before it moves in (S6 2026-11-13: the zero was the first sample
+        after the node started, hours and many poses earlier; the cup's readings drift and change
+        with the cup's orientation, and a stale zero reads as uneven loading)."""
+        zero = np.mean(np.asarray(values_list, dtype=float), axis=0)
+        self._stack[0] = proc.Normalize(offsets=zero)
+        self._cap = None
 
     def _lateral(self):
         if np.sum(self._cap) == 0:
