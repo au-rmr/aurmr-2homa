@@ -25,7 +25,7 @@ Person in the lab with the e-stop in reach; agent on the compute host.
 3. Remove the suction cup. For each point, freedrive flush, hold still, and the agent runs (the shell's /repo is read-only, so points go to /tmp; copy them out after each):
    ```
    docker exec s4shell bash -c "source /ws/install/setup.bash; cd /repo; python3 tests/arm/touch_point.py <feature> /tmp/points.csv"
-   docker cp s4shell:/tmp/points.csv <ledger dir>/points_raw.csv
+   docker cp s4shell:/tmp/points.csv runs/<date>_pod_calibration/points_raw.csv
    ```
    Spread over 0.5 mm means it moved: redo. Points: `face_left_low`, `face_left_high`, `face_right_low`, `face_right_high` (low and high as far apart as the arm reaches), `right_side_cyl_low`, `left_side_cyl_low`. Optional height check to a separate file: the end flat on a surface of taped height (e.g. `table_top` into /tmp/heights.csv).
 4. Fit: `docker exec s4shell bash -c "cd /repo; python3 tests/arm/fit_pod.py --floor /tmp/points.csv sites/uw_lab/workcell.yaml"`. Pass: every point within 3 mm of its surface, every cup within 3 degrees; the two side residuals agree (otherwise the taped width is wrong); face touches land on their uprights in pod x.
@@ -39,7 +39,7 @@ Person in the lab with the e-stop in reach; agent on the compute host.
    python3 tests/arm/corner_check.py back [--pose drop_hide]
    ```
    (each as `docker exec s4shell bash -c "source /ws/install/setup.bash; cd /repo; python3 ..." > <file> 2>&1`). The cup should point at the corner with the stated air gap.
-7. After: `scripts/test_model.sh`, then `scripts/test_demo.sh` once; record everything in the ledger.
+7. After: `scripts/test_model.sh`, then `scripts/test_demo.sh` once; record everything in the run folder (README, Run records), and commit `points_raw.csv` (and any height check) in `sites/<site>/calibration_data/pod_<date>/` with the new frame.
 
 ## Optional cross-check with the Kinect
 The Kinect behind the arm (ROS 1 driver only: the Phase 2 compose file for the compute host in `~/refresh/phase2/compose/`, services roscore + kinect, topics under `/camera_lower_right/`) sees the pod face and the arm. An image grabbed 2026-11-09 is in `~/refresh/phase3/podcal/`. Overlaying the corrected model on it checks the result, but the camera's own pose was set by hand, so the arm in the image has to line up first. Not needed for the calibration.

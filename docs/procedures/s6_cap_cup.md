@@ -1,7 +1,7 @@
 # S6: the cap_cup demo on the real robot
 
 After S4 has passed. Each level is its own go-ahead; stop at the first surprise and write it down.
-Same rules as S4: a person at the e-stop for any motion, results into the S6 ledger with date and commit.
+Same rules as S4: a person at the e-stop for any motion, results into the session's run folder (`runs/<date>_s6/`, README "Run records") with date and commit.
 Speed (user 2026-11-12): every move's speed is set in code to be safe with the tablet slider at 100 % (planned moves have a tool tip cap, 0.25 m/s by default; straight moves their own m/s). Set the slider once per session (e.g. 50 % for new code) and only lower it; scripts print each move's real speed at the current slider.
 
 ## What has been checked without the robot
@@ -30,7 +30,7 @@ Per-channel gains and one deflection curve (`capcup_driver/calibration.py`), fro
 1. `start --square --roll 0`: planned, 40 mm above the table along the cup, square to it.
 2. `press --back --out /tmp/cal_A.csv`: in until 8 N, hold 3 s, back out, logged. Repeat as run B.
 3. `start --square --roll 180`, then `press --back --out /tmp/cal_C.csv`.
-4. `docker cp` the CSVs out, then `python3 tests/arm/cap_fit.py A B C --out sites/<site>/tools/capcup_calibration.yaml`.
+4. `docker cp` the CSVs into the run folder, then `python3 tests/arm/cap_fit.py A B C --out sites/<site>/tools/capcup_calibration.yaml`. Commit the CSVs and the fit's output in `sites/<site>/calibration_data/capcup_<date>/` with the new yaml.
 Repeats should agree within ~0.03 per gain; a difference between rolls is a tilt fixed in the room, which the fit cancels by averaging rolls. The table's height and tilt came from touching it with the aluminium end (suction cup off, freedrive, `tests/arm/touch_point.py`, 4 points). The search does not use the gains yet.
 
 ## L4: the demo in pieces, item in bin 2H, low speed

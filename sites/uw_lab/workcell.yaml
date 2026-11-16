@@ -18,8 +18,9 @@ objects:
   # Thickness is assumed.
   table_down: {frame: base_link, xyz: [0.515, -0.165, 0.70], size: [0.61, 1.52, 0.05]}
   # The same standing desk raised (2026-11-12). Touched by the arm (aluminium end, 4 points,
-  # ~/refresh/phase3/s6/table_points.csv): top plane z = 0.99140 + 0.02036 x + 0.00052 y, residuals
-  # <= 0.24 mm: 1.0006 at the cap press spot (0.45, 0), rising 1.17 deg towards the pod, level in y.
+  # calibration_data/table_up_2026-11-12/table_points.csv): top plane
+  # z = 0.99140 + 0.02036 x + 0.00052 y, residuals <= 0.24 mm: 1.0006 at the cap press spot
+  # (0.45, 0), rising 1.17 deg towards the pod, level in y.
   # Footprint assumed = table_down's. Lowered, it is out of the cup's reach (arm shoulder z 1.84).
   table_up: {frame: base_link, xyz: [0.5155, -0.165, 0.9768], rpy: [0, -0.02036, 0], size: [0.61, 1.52, 0.05]}
   # Carried from aurmr_tasks planning_scene.py. These follow the pod frame, so they inherit

@@ -7,7 +7,8 @@
       </Interfaces>
     </General>
     <Internal>
-      <SocketReceiveBufferSize min="2MB"/>
+      <!-- max: needs docker/host/60-ros2-dds.conf on the host for large messages (camera images); min stays low so a host without it still starts -->
+      <SocketReceiveBufferSize min="2MB" max="256MB"/>
     </Internal>
   </Domain>
 </CycloneDDS>

@@ -50,12 +50,11 @@ services:
     restart: "no"
 
   # CapCup dashboard window (old ROS 1 cap_dashboard, ported). Profile dashboard. Needs the
-  # desktop's DISPLAY and XAUTHORITY in the environment (e.g. DISPLAY=:1
-  # XAUTHORITY=/run/user/$UID/gdm/Xauthority on inter). Image: docker/dashboard (adds pyqtgraph).
+  # desktop's DISPLAY and XAUTHORITY in the environment (the host's values:
+  # sites/<site>/hosts/<host>/display.env). Image: base (has pyqtgraph since 2026-11-16).
   dashboard:
     <<: *ros
-    image: ghcr.io/au-rmr/aurmr-2homa/dashboard:dev
-    build: {context: .., dockerfile: docker/dashboard/Dockerfile}
+    image: ghcr.io/au-rmr/aurmr-2homa/base:dev
     profiles: [dashboard]
     volumes:
       - ..:/repo:ro

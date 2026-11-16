@@ -21,6 +21,13 @@ All run in containers with no network access, and none need a robot.
 
 Procedures for the real robot: `docs/procedures/`.
 
+## Run records
+Each session on the real robot keeps its notes and outputs in `runs/<YYYY-MM-DD>_<what>/` in the compute host's checkout (e.g. `runs/2026-11-20_s6/`). The folder is gitignored: records stay local and can be deleted when no longer useful. Copy outputs from the control host there too.
+- `notes.md`: date, commit, image ID, who is at the e-stop, then each step's result and anything surprising.
+- Every step's full output, as the procedure names it. Containers mount the repo read-only, so they write to `/tmp` and you `docker cp` the files into the run folder.
+- If a committed value comes from the session (a calibration, a measured size), also copy its raw data into `sites/<site>/calibration_data/<what>_<date>/` and commit it with the value.
+- `git clean -x` deletes ignored files, including `runs/`.
+
 ## Check the workcell by eye
 `scripts/view_scene.sh` opens RViz with the collision shapes and a picker for pose and scene. The picker shows MoveIt's verdict for that combination.
 

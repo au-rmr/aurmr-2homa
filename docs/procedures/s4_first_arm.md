@@ -9,8 +9,8 @@ Stop at the first surprise and write it down before going on. First run: 2026-11
 - The tablet's own safety limits stay as they are: they sit under our checks, not instead of them.
 - Check once before the first motion that the person is at the e-stop, then keep them there for the whole session. The step script doesn't prompt; it prints what each step will do before it moves.
 - Agent helping: quote the exact command before each step, and wait for the person's "go" in a new message before every motion. Never ask for go and run the command in the same reply.
-- Save the full output of every step to a file; don't trim it.
-- Every result goes into the S4 ledger, with the date and the commit.
+- Save the full output of every step to a file in the session's run folder (`runs/<date>_s4/`, README "Run records"); don't trim it.
+- Every result goes into that folder's `notes.md`, with the date and the commit.
 
 ## Before the session
 1. `scripts/test_mock.sh` and `scripts/test_ursim.sh` pass at the commit you are running.
@@ -83,7 +83,7 @@ If a straight move fails with `PartialPath: straight path refused: joint N moves
 ## After
 - Shut down: `docker rm -f s4shell` on the compute host, `AURMR_HOST=<control host> docker compose -f compose/control.yaml --profile robot down` on the control host.
 - Measure the force change while the wrist rotates with no contact (S4 plan, problem 4). It must stay well under the stop forces.
-- Write the ledger.
+- Finish `notes.md` in the run folder.
 
 ## What was rehearsed without the arm
 `scripts/test_ursim.sh` runs this bringup with the real UR driver against URSim (headless mode), including steps 1, 4 to 8 and 13 (slider at 1%), the slider at 10% (a 5 cm move takes about a minute and must still finish), a killed demo and a stopped program. `URSIM_VERSION` picks the PolyScope version.

@@ -39,3 +39,4 @@ ros-jazzy-rviz2
 
 # pip, only to install docker/base/pip-packages.txt
 python3-pip
+python3-pyqtgraph

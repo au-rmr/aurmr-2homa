@@ -1,0 +1,26 @@
+diff --git a/include/azure_kinect_ros_driver/k4a_calibration_transform_data.h b/include/azure_kinect_ros_driver/k4a_calibration_transform_data.h
+index ecf8b28..8c2f1ff 100644
+--- a/include/azure_kinect_ros_driver/k4a_calibration_transform_data.h
++++ b/include/azure_kinect_ros_driver/k4a_calibration_transform_data.h
+@@ -16,7 +16,7 @@
+ #include <k4a/k4a.hpp>
+ #include <k4arecord/playback.hpp>
+ #include "rclcpp/rclcpp.hpp"
+-#include <tf2_ros/static_transform_broadcaster.h>
++#include <tf2_ros/static_transform_broadcaster.hpp>
+ #include <tf2/LinearMath/Quaternion.h>
+ #include <tf2/LinearMath/Matrix3x3.h>
+ #include <tf2/LinearMath/Vector3.h>
+diff --git a/src/k4a_ros_device.cpp b/src/k4a_ros_device.cpp
+index b17884f..43be830 100644
+--- a/src/k4a_ros_device.cpp
++++ b/src/k4a_ros_device.cpp
+@@ -14,7 +14,7 @@
+ // Library headers
+ //
+ #include <angles/angles.h>
+-#include <cv_bridge/cv_bridge.h>
++#include <cv_bridge/cv_bridge.hpp>
+ #include <k4a/k4a.h>
+ #include <sensor_msgs/distortion_models.hpp>
+ #include <sensor_msgs/image_encodings.hpp>

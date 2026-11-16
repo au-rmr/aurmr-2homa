@@ -1,7 +1,6 @@
 # CapCup channel calibration, 2026-11-12, tests/arm/cap_fit.py from:
-#   cal_A.csv
-#   cal_B.csv
-#   cal_C.csv
+#   cal_A.csv, cal_B.csv, cal_C.csv in sites/uw_lab/calibration_data/capcup_2026-11-12/
+#   (fit output: cal_fit_ABC.txt there)
 # Channel k's change from its in-air value ~ gains[k] * curve(deflection), loading side.
 # In-air values are taken at run time (they drift), never from this file.
 gains: [0.8353, 0.8167, 0.8028, 0.9376, 1.1351, 1.2382, 1.1974, 1.037]

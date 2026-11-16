@@ -1,0 +1,5 @@
+# Model weights the perception image expects, relative to the weights folder bind-mounted read-only at
+# /weights (never in git or the image). Check: cd <weights folder> && grep -v '^#' <this file> | sha256sum -c
+0e98fe810df17072402e75cebdd7ddf2ee0f3e47344a9c920de3e4dc6038d68e  optigrasp_depth_anything/hardware_comms_30_c.pth
+0da4738de666148a893f0c08d0f3aaeaf5fbe2a81d4e450d8985d688379360b3  optigrasp_depth_anything/hardware_comms_30_c.state_dict.pth
+59604be2bf17ef86856dcf9acbb64eb815ef3d2b3f63cc005d92682341f382a3  uois_mask2former/model_final_stack.pth

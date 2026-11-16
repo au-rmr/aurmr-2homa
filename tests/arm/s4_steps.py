@@ -3,7 +3,7 @@
 Usage: python3 tests/arm/s4_steps.py <step>
 No prompts: the procedure's rule (a person at the e-stop, area clear, slider low) is checked once
 by the people running the session, before the first motion.
-Results print as RESULT lines, to copy into the S4 ledger.
+Results print as RESULT lines, to copy into the run notes (README, Run records).
 """
 import argparse
 import math
