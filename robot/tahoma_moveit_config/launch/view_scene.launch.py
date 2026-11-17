@@ -1,4 +1,4 @@
-"""RViz + scene_viewer. Args: site_dir (absolute), tool, pose, scene, table (a table_* object or none)."""
+"""RViz + scene_viewer. Args: site_dir (absolute), tool, pose, scene, table (a table_* object or none), rviz (config file)."""
 import os
 import tempfile
 
@@ -28,7 +28,7 @@ def setup(context):
         Node(package="robot_state_publisher", executable="robot_state_publisher",
              parameters=[{"robot_description": urdf}]),
         Node(package="rviz2", executable="rviz2",
-             arguments=["-d", os.path.join(pkg, "config", "view_scene.rviz")],
+             arguments=["-d", os.path.join(pkg, "config", get("rviz"))],
              on_exit=Shutdown()),
         ExecuteProcess(cmd=["python3", "-m", "tahoma_moveit_config.scene_viewer",
                             "--urdf", urdf_path, "--srdf", srdf_path, "--workcell", workcell,
@@ -44,5 +44,6 @@ def generate_launch_description():
         DeclareLaunchArgument("pose", default_value="drop_hide"),
         DeclareLaunchArgument("scene", default_value="limits_drop_hide"),
         DeclareLaunchArgument("table", default_value="table_down"),
+        DeclareLaunchArgument("rviz", default_value="view_scene.rviz"),   # view_scene_camera.rviz adds the Kinect cloud
         OpaqueFunction(function=setup),
     ])

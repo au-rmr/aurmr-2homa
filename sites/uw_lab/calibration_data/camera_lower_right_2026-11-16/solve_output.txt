@@ -1,0 +1,104 @@
+p00: tags 35: 96px/0.32px, 43: 93px/0.08px; link spread 0.04 mm
+p01: tags 35: 96px/0.62px; link spread 0.06 mm
+p02: tags 43: 96px/0.08px; link spread 0.06 mm
+p03: tags 43: 93px/0.06px; link spread 0.04 mm
+p04: tags 35: 87px/0.05px, 43: 95px/0.14px; link spread 0.04 mm
+p05: tags 35: 124px/0.21px; link spread 0.07 mm
+p06: tags 43: 117px/0.19px; link spread 0.05 mm
+p07: tags 35: 81px/0.07px; link spread 0.04 mm
+p08: tags 42: 137px/0.44px; link spread 0.06 mm
+p09: tags 42: 141px/0.22px, 43: 98px/1.53px; link spread 0.04 mm
+p10: tags 35: 95px/0.06px, 42: 149px/0.46px, 43: 92px/0.06px; link spread 0.03 mm
+p11: tags 35: 116px/0.48px, 42: 149px/0.58px, 43: 108px/0.16px; link spread 0.05 mm
+p12: tags 42: 151px/0.45px, 43: 145px/0.26px; link spread 0.06 mm
+p13: tags 42: 141px/0.11px, 43: 78px/0.06px; link spread 0.06 mm
+p14: tags 35: 128px/0.53px, 42: 149px/0.19px; link spread 0.05 mm
+tag 35: 8 poses; reprojection rms by link: arm_forearm_link 1.74px, arm_upper_arm_link 664.23px, arm_wrist_1_link 818.79px, arm_shoulder_link 820.45px, arm_tool0 831.08px, arm_wrist_3_link 831.08px, arm_wrist_2_link 890.85px
+tag 43: 10 poses; reprojection rms by link: arm_wrist_2_link 2.06px, arm_wrist_3_link 44.77px, arm_tool0 44.77px, arm_wrist_1_link 47.46px, arm_forearm_link 301.26px, arm_upper_arm_link 309.99px, arm_shoulder_link 611.23px
+tag 42: 7 poses; reprojection rms by link: arm_shoulder_link 0.67px, arm_upper_arm_link 15.79px, arm_forearm_link 76.16px, arm_wrist_3_link 107.22px, arm_tool0 107.22px, arm_wrist_1_link 109.57px, arm_wrist_2_link 117.68px
+joint fit started from tag 35's camera: rms 2.16 px
+joint fit started from tag 42's camera: rms 2.16 px
+joint fit started from tag 43's camera: rms 2.16 px
+ALL TAGS  camera at [-0.2077 -0.0288  1.3864] m; reprojection rms 2.16 px, worst corner 6.3 px, 25 tag views
+single-tag solutions vs joint (mm, deg): 35: (4.0, 0.41), 42: (2348.2, 70.91), 43: (1.1, 0.1)
+{
+ "parent": "base_link",
+ "child": "rgb_camera_link",
+ "xyz": [
+  -0.20773141847897278,
+  -0.028768115510941408,
+  1.3863998237545312
+ ],
+ "quat_xyzw": [
+  -0.4838414404207653,
+  0.47910302561167495,
+  -0.5192489067706332,
+  0.5164671569410779
+ ],
+ "reprojection_rms_px": 2.164,
+ "worst_corner_px": 6.3,
+ "views": 25,
+ "poses": 15,
+ "tags": {
+  "35": {
+   "link": "arm_forearm_link",
+   "xyz": [
+    -0.3537318240894726,
+    4.14614331938062e-05,
+    -0.01706613169663446
+   ],
+   "quat_xyzw": [
+    0.7324869232154209,
+    -0.6791037053780797,
+    -0.03692524393199622,
+    0.030291764899571964
+   ],
+   "single_tag_rms_px": 1.738,
+   "single_vs_joint_mm_deg": [
+    4.0,
+    0.41
+   ]
+  },
+  "42": {
+   "link": "arm_shoulder_link",
+   "xyz": [
+    -0.03681901758201232,
+    -0.010030504653228082,
+    0.08736959836088035
+   ],
+   "quat_xyzw": [
+    -0.04357425259241894,
+    -0.0020841481993424354,
+    -0.1455857498785655,
+    0.9883833923481268
+   ],
+   "single_tag_rms_px": 0.674,
+   "single_vs_joint_mm_deg": [
+    2348.2,
+    70.91
+   ]
+  },
+  "43": {
+   "link": "arm_wrist_2_link",
+   "xyz": [
+    -5.102117158427279e-05,
+    -0.05500576661596699,
+    0.0022140080645216406
+   ],
+   "quat_xyzw": [
+    0.4769460942627073,
+    -0.47983361733351443,
+    0.521232097021631,
+    0.5201915261503365
+   ],
+   "single_tag_rms_px": 2.063,
+   "single_vs_joint_mm_deg": [
+    1.1,
+    0.1
+   ]
+  }
+ },
+ "family": "36h11",
+ "tag_size_m": 0.036,
+ "curved_tags_fitted_size_m": {}
+}

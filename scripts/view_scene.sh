@@ -2,11 +2,14 @@
 # Opens RViz and a pose/scene picker for checking workcell data. No network, so it cannot reach
 # a robot. Usage: scripts/view_scene.sh [pose:=home] [scene:=limits_full]
 # VIEW_EXTRA="<command>" runs that command in the same container too (e.g. touch_targets.py markers).
+# With the camera (scripts/view_camera.sh) it joins the host network on an isolated local domain instead:
+# VIEW_NETWORK=host with ROS_DOMAIN_ID and ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST from the caller.
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 SITE=${AURMR_SITE:-uw_lab}
 : "${DISPLAY:?needs a desktop session; set DISPLAY}"
-docker run --rm --network none -u "$(id -u):$(id -g)" -e HOME=/tmp -e ROBOT_LAN_IP=127.0.0.1 \
+docker run --rm --network "${VIEW_NETWORK:-none}" -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}" \
+  -e ROS_AUTOMATIC_DISCOVERY_RANGE="${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}" -u "$(id -u):$(id -g)" -e HOME=/tmp -e ROBOT_LAN_IP=127.0.0.1 \
   -e DISPLAY -e QT_X11_NO_MITSHM=1 -e LIBGL_ALWAYS_SOFTWARE=1 \
   -e XAUTHORITY=/tmp/.xauth -v "${XAUTHORITY:-$HOME/.Xauthority}":/tmp/.xauth:ro \
   -v /tmp/.X11-unix:/tmp/.X11-unix -v "$PWD":/repo:ro -w /tmp \

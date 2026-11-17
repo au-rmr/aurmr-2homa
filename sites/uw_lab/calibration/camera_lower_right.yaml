@@ -1,0 +1,11 @@
+# Azure Kinect (camera_lower_right) pose, 2026-11-16: eye-to-hand with AprilTags (tag36h11, 36 mm) on the arm,
+# 15 freedrive poses, tests/perception/handeye_solve.py (joint reprojection fit). Raw data:
+# calibration_data/camera_lower_right_2026-11-16/. Tags: 35 on arm_forearm_link (wrist 1 cap), 43 on arm_wrist_2_link
+# (wrist 3 cap), 42 on arm_shoulder_link (base joint cap). Reprojection rms 2.164 px over 25 tag views;
+# even/odd halves of the poses agree within 4.4 mm / 0.30 deg. Checked against the touch-calibrated pod model
+# (workcell.yaml pod_base_link + pods.pod_bins projected into the image line up with the real pod).
+# child = the driver's rgb_camera_link (colour camera optical frame: z forward, x right, y down).
+parent: base_link
+child: rgb_camera_link
+xyz: [-0.20773, -0.02877, 1.3864]
+quat_xyzw: [-0.483841, 0.479103, -0.519249, 0.516467]
