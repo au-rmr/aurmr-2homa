@@ -7,8 +7,8 @@ Mask2Former (uois.frame). Behaviour kept from the service, including what is sur
 - several frames (the same bin after each stow): every item found in the LAST frame, labelled 1..n in model order,
   a later item wins where masks overlap; items whose last-frame embedding is missing are skipped in the embeddings
   but still get a label.
-The images go to the model in the order they are given (the service passed RGB crops to a model configured for BGR
-input, and the model was trained that way, so this port does the same: give it what the camera's rgb8 topic gives).
+Frames are BGR uint8 (OpenCV order): what the workcell sent. The Kinect publishes bgra8; the tracker cropped its first
+three channels and the service passed them on (labelled rgb8, but the data was BGR, as the recorded crops show).
 """
 import os
 

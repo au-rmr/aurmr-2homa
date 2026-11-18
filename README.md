@@ -18,7 +18,7 @@ All run in containers with no network access, and none need a robot.
 | `scripts/test_ursim.sh` | The real-arm bringup against URSim, UR's controller simulator (needs its image once) | about 3 min |
 | `scripts/test_tools.sh` | capcup drivers: same results as the old ROS 1 code, ejector requests, nodes | under 1 min |
 | `scripts/test_demo.sh` | The cap_cup demo end to end on mock with a pretend item | about 3 min |
-| `scripts/test_perception.sh` | Bin segmentation against recorded outputs; camera-calibration solver on synthetic data. Needs an NVIDIA GPU, the perception image and the weights | about 1 min |
+| `scripts/test_perception.sh` | Bin segmentation against recorded outputs; bin tracker on a synthetic pod; camera-calibration solver on synthetic data. Needs an NVIDIA GPU, the perception image and the weights | about 1 min |
 
 Procedures for the real robot: `docs/procedures/`.
 

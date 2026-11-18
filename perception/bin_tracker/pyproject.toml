@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bin_tracker"
+version = "0.1.0"
+description = "Per-bin item masks kept up to date across stows and picks (segmenter passed in)"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "opencv-python-headless"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
