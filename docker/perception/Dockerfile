@@ -39,5 +39,8 @@ RUN git clone -q https://github.com/facebookresearch/detectron2.git /opt/detectr
     && git -C /opt/Mask2Former apply /tmp/uois-patches/mask2former-9b0651c.patch \
     && rm -rf /opt/detectron2/.git /opt/Mask2Former/.git /tmp/uois-patches
 ENV PYTHONPATH=/opt/detectron2:/opt/Mask2Former
+# Our plain-Python perception packages (the ROS 2 nodes in perception/ are built by colcon at container start).
 COPY perception/uois /tmp/uois
-RUN pip3 install --no-cache-dir --break-system-packages --no-deps --no-build-isolation /tmp/uois && rm -rf /tmp/uois
+COPY perception/bin_tracker /tmp/bin_tracker
+RUN pip3 install --no-cache-dir --break-system-packages --no-deps --no-build-isolation /tmp/uois /tmp/bin_tracker \
+    && rm -rf /tmp/uois /tmp/bin_tracker

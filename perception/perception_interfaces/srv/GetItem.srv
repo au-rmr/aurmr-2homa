@@ -1,0 +1,10 @@
+# Where an item is: its bin, its mask in the colour image and (unless mask_only) its points in frame_id.
+string item_id
+string frame_id
+bool mask_only
+---
+bool success
+string message
+string bin_id
+sensor_msgs/Image mask
+sensor_msgs/PointCloud2 points

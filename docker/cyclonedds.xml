@@ -11,4 +11,13 @@
       <SocketReceiveBufferSize min="2MB" max="256MB"/>
     </Internal>
   </Domain>
+  <!-- Camera domain (77): high-rate images between processes on one host only (Kinect driver -> perception node),
+       loopback, never the robot LAN. Perception bridges by joining both domains (perception/pod_perception). -->
+  <Domain Id="77">
+    <General>
+      <Interfaces>
+        <NetworkInterface address="127.0.0.1" priority="default" multicast="default"/>
+      </Interfaces>
+    </General>
+  </Domain>
 </CycloneDDS>

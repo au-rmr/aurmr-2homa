@@ -75,7 +75,63 @@ services:
       exec ros2 run capcup_driver cap_dashboard"
     restart: "no"
 
+  # Perception (profile perception): the Azure Kinect on the camera domain (77, loopback only: ~300 MB/s of images
+  # never reach the robot LAN, docker/cyclonedds.xml) and the pod perception node, which reads the camera there and
+  # serves the robot domain (bin tracking, item masks/points, OptiGrasp grasps; perception/pod_perception).
+  # Needs: a GPU; the desktop's DISPLAY and XAUTHORITY (the Kinect's depth engine needs GLX; the host's values are in
+  # sites/<site>/hosts/<host>/display.env); docker/host/60-ros2-dds.conf on the host; the weights in AURMR_WEIGHTS
+  # (default ~/aurmr-data/weights). Images are built locally: docker compose -f compose/compute.yaml build kinect perception
+  kinect:
+    <<: *ros
+    image: ${KINECT_IMAGE:-aurmr-2homa/kinect:draft}
+    build: {context: .., dockerfile: docker/kinect/Dockerfile}
+    profiles: [perception]
+    gpus: all
+    device_cgroup_rules: ["c 189:* rmw"]
+    volumes:
+      - ../docker/cyclonedds.xml:/etc/cyclonedds.xml:ro   # has the loopback camera domain; base:dev predates it
+      - /dev/bus/usb:/dev/bus/usb
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${XAUTHORITY:?set XAUTHORITY}:/tmp/.Xauthority:ro
+    environment:
+      ROS_DOMAIN_ID: "77"
+      DISPLAY: ${DISPLAY:?set DISPLAY}
+      XAUTHORITY: /tmp/.Xauthority
+      NVIDIA_DRIVER_CAPABILITIES: all
+    # The ROS 1 demo's settings: 3072P colour (bgra8), unbinned wide depth registered to colour, 5 fps. No point
+    # cloud: the perception node back-projects depth_to_rgb itself (a 3072P cloud is ~400 MB per message).
+    command: >
+      bash -c "source /opt/kinect_ws/install/setup.bash &&
+      exec ros2 run azure_kinect_ros_driver node --ros-args -r __ns:=/camera_lower_right
+      -p color_enabled:=true -p color_resolution:=3072P -p color_format:=bgra -p depth_mode:=WFOV_UNBINNED
+      -p fps:=5 -p point_cloud:=false -p rgb_point_cloud:=false"
+    restart: "no"
+
+  perception:
+    <<: *ros
+    image: ${PERCEPTION_IMAGE:-aurmr-2homa/perception:draft}
+    build: {context: .., dockerfile: docker/perception/Dockerfile}
+    profiles: [perception]
+    gpus: all
+    volumes:
+      - ../docker/cyclonedds.xml:/etc/cyclonedds.xml:ro
+      - ..:/repo:ro
+      - perception_ws:/ws
+      - ${AURMR_WEIGHTS:-~/aurmr-data/weights}:/weights:ro
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+      colcon --log-base /ws/log build --base-paths /repo/perception
+      --build-base /ws/build --install-base /ws/install >/ws/colcon.txt &&
+      source /ws/install/setup.bash &&
+      exec ros2 run pod_perception pod_perception --ros-args
+      -p workcell:=/repo/sites/$${AURMR_SITE:-uw_lab}/workcell.yaml
+      -p calibration:=/repo/sites/$${AURMR_SITE:-uw_lab}/calibration/camera_lower_right.yaml
+      -p uois_weights:=/weights/uois_mask2former/model_final_stack.pth
+      -p optigrasp_weights:=/weights/optigrasp_depth_anything/hardware_comms_30_c.state_dict.pth"
+    restart: "no"
+
 volumes:
+  perception_ws:
   shell_ws:
   tool_ws:
   dashboard_ws:

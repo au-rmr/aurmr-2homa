@@ -1,0 +1,9 @@
+# Tell the pod tracker what just happened to a bin: ~/stow (bin_id + item_id: the item was put in), ~/pick (item_id:
+# it was taken out), ~/update (bin_id: re-capture, nothing changed on purpose), ~/reset_bin (bin_id: emptied by hand).
+string bin_id
+string item_id
+---
+bool success
+# OK, NO_OBJ_STORED, UNDERSEGMENTATION, OBJ_NOT_FOUND, MATCH_FAILED, IN_BAD_BINS, or ERROR
+string status
+string message

@@ -1,0 +1,16 @@
+# A suction grasp on a tracked item (OptiGrasp on the latest colour image, the item's mask cropped to its bin): the
+# grasp point in frame_id (depth at the grasp pixel, through the camera's lens model) and the model's tilt.
+string item_id
+string frame_id
+---
+bool success
+string message
+string bin_id
+geometry_msgs/PointStamped point
+# The model's angles, rad (roll from its roll map +-20 deg, pitch from its pitch map +-10 deg). The ROS 1 demo turned
+# them into a tool orientation as euler xyz (roll, -pitch, 0) in the camera frame; the skill decides how to use them.
+float64 roll
+float64 pitch
+# Grasp pixel (x, y) in the colour image
+int32 pixel_x
+int32 pixel_y
