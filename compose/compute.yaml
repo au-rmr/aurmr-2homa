@@ -29,7 +29,7 @@ services:
     tty: true
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
-      colcon --log-base /ws/log build --base-paths /repo/robot /repo/end_effectors /repo/skills /repo/demos
+      colcon --log-base /ws/log build --base-paths /repo/robot /repo/end_effectors /repo/skills /repo/perception /repo/demos
       --build-base /ws/build --install-base /ws/install >/ws/colcon.txt &&
       source /ws/install/setup.bash && cd /repo && exec bash"
 
@@ -76,7 +76,7 @@ services:
     restart: "no"
 
   # Perception (profile perception): the Azure Kinect on the camera domain (77, loopback only: ~300 MB/s of images
-  # never reach the robot LAN, docker/cyclonedds.xml) and the pod perception node, which reads the camera there and
+  # never reach the robot LAN, docker/cyclonedds_perception.xml) and the pod perception node, which reads the camera there and
   # serves the robot domain (bin tracking, item masks/points, OptiGrasp grasps; perception/pod_perception).
   # Needs: a GPU; the desktop's DISPLAY and XAUTHORITY (the Kinect's depth engine needs GLX; the host's values are in
   # sites/<site>/hosts/<host>/display.env); docker/host/60-ros2-dds.conf on the host; the weights in AURMR_WEIGHTS
@@ -89,12 +89,12 @@ services:
     gpus: all
     device_cgroup_rules: ["c 189:* rmw"]
     volumes:
-      - ../docker/cyclonedds.xml:/etc/cyclonedds.xml:ro   # has the loopback camera domain; base:dev predates it
       - /dev/bus/usb:/dev/bus/usb
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - ${XAUTHORITY:?set XAUTHORITY}:/tmp/.Xauthority:ro
     environment:
       ROS_DOMAIN_ID: "77"
+      ROBOT_LAN_IP: 127.0.0.1    # its only domain is the camera domain: loopback (docker/cyclonedds.xml)
       DISPLAY: ${DISPLAY:?set DISPLAY}
       XAUTHORITY: /tmp/.Xauthority
       NVIDIA_DRIVER_CAPABILITIES: all
@@ -114,7 +114,7 @@ services:
     profiles: [perception]
     gpus: all
     volumes:
-      - ../docker/cyclonedds.xml:/etc/cyclonedds.xml:ro
+      - ../docker/cyclonedds_perception.xml:/etc/cyclonedds.xml:ro   # robot domain on the LAN, camera domain on loopback
       - ..:/repo:ro
       - perception_ws:/ws
       - ${AURMR_WEIGHTS:-~/aurmr-data/weights}:/weights:ro

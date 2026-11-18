@@ -1,0 +1,10 @@
+# The pod's inventory as the tracker knows it.
+---
+# false until ~/capture_empty_pod has run
+bool ready
+string[] item_ids
+string[] bin_ids
+# bins whose item masks are unreliable (reset them by hand)
+string[] bad_bins
+# bins in the camera's view
+string[] bins_in_view

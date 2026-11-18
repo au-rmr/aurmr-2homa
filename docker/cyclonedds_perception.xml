@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- For the perception container only (compose/compute.yaml): one process on two domains. The robot domain
+     (ROS_DOMAIN_ID) on the robot LAN, as docker/cyclonedds.xml; the camera domain (77) on loopback only, so the
+     camera's ~300 MB/s never reaches the LAN. Separate sections, no Domain "any": Cyclone merges matching sections, and
+     an "any" interface list would be added to domain 77's. The Kinect container uses docker/cyclonedds.xml with
+     ROBOT_LAN_IP=127.0.0.1 (its only domain is the camera domain). -->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="${ROS_DOMAIN_ID}">
+    <General>
+      <Interfaces>
+        <NetworkInterface address="${ROBOT_LAN_IP}" priority="default" multicast="default"/>
+      </Interfaces>
+    </General>
+    <Internal>
+      <SocketReceiveBufferSize min="2MB" max="256MB"/>
+    </Internal>
+  </Domain>
+  <Domain Id="77">
+    <General>
+      <Interfaces>
+        <NetworkInterface address="127.0.0.1" priority="default" multicast="default"/>
+      </Interfaces>
+    </General>
+    <Internal>
+      <SocketReceiveBufferSize min="2MB" max="256MB"/>
+    </Internal>
+  </Domain>
+</CycloneDDS>

@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""The optigrasp demo's operator console (ROS 2 port of the ROS 1 simple_pick_and_stow_cli.py's stow side).
+Needs the perception profile up (compose/compute.yaml --profile perception). Type `help` for commands.
+
+The flow: with the pod in its starting state, `empty` takes the reference image (bins with items already in them are
+fine, they just are not tracked). Then for each item: `stow <bin> <item>`, put the item in the bin, press Enter. The
+camera must see the bin: stand clear after placing. `grasp <item>` shows where the vision grasp would go (no arm
+motion). `taken <item>` after an item was taken out (by hand, or by the arm once picking is wired in)."""
+import shlex
+import sys
+
+import numpy as np
+import rclpy
+
+from optigrasp_demo.perception import Perception
+
+HELP = """commands:
+  empty                 take the empty-pod reference (do this first; bins as they are now)
+  stow <bin> <item>     then put the item in the bin and press Enter
+  taken <item>          the item was taken out of its bin
+  update <bin>          re-capture a bin (e.g. after a failed grasp moved things)
+  reset <bin>           forget a bin's items (after emptying it by hand)
+  list                  the inventory
+  where <item>          the item's bin, mask size and centre (base_link)
+  grasp <item>          the vision grasp on the item (point in base_link, model tilt); no arm motion
+  quit"""
+
+
+def show(r):
+    status = getattr(r, "status", "")
+    print(("OK   " if r.success else "FAIL ") + (f"[{status}] " if status else "") + r.message, flush=True)
+
+
+def main():
+    rclpy.init()
+    node = rclpy.create_node("optigrasp_cli")
+    p = Perception(node)
+    print(HELP, flush=True)
+    while True:
+        try:
+            line = input("optigrasp> ").strip()
+        except EOFError:
+            break
+        if not line:
+            continue
+        cmd, *args = shlex.split(line)
+        try:
+            if cmd in ("quit", "exit", "q"):
+                break
+            elif cmd == "help":
+                print(HELP)
+            elif cmd == "empty" and not args:
+                show(p.empty_pod())
+            elif cmd == "stow" and len(args) == 2:
+                bin_id, item = args[0].upper(), args[1]
+                input(f"put {item} in {bin_id}, stand clear of the camera's view, then press Enter ")
+                r = p.stow(bin_id, item)
+                show(r)
+                if r.status == "NO_OBJ_STORED":
+                    print("  nothing new seen in that bin: check it is in the camera's view and try `stow` again")
+            elif cmd == "taken" and len(args) == 1:
+                show(p.taken(args[0]))
+            elif cmd == "update" and len(args) == 1:
+                show(p.update(args[0].upper()))
+            elif cmd == "reset" and len(args) == 1:
+                show(p.reset_bin(args[0].upper()))
+            elif cmd == "list" and not args:
+                r = p.items()
+                if not r.ready:
+                    print("no reference yet: run `empty` first")
+                    continue
+                for i, b in zip(r.item_ids, r.bin_ids):
+                    print(f"  {b:4s} {i}" + ("   (bin lost track: reset it)" if b in r.bad_bins else ""))
+                print(f"  {len(r.item_ids)} items; bins in view: {' '.join(r.bins_in_view)}")
+            elif cmd == "where" and len(args) == 1:
+                r = p.where(args[0])
+                show(r)
+                if r.success and r.points.width:
+                    pts = np.frombuffer(bytes(r.points.data), np.float32).reshape(-1, r.points.point_step // 4)[:, :3]
+                    print(f"  centre (base_link) {np.round(pts.mean(0).astype(float), 3).tolist()}, {len(pts)} points")
+            elif cmd == "grasp" and len(args) == 1:
+                r = p.grasp(args[0])
+                show(r)
+                if r.success:
+                    q = r.point.point
+                    print(f"  point (base_link) [{q.x:.3f}, {q.y:.3f}, {q.z:.3f}]  pixel ({r.pixel_x}, {r.pixel_y})  "
+                          f"roll {np.degrees(r.roll):.1f} deg  pitch {np.degrees(r.pitch):.1f} deg")
+            else:
+                print(f"? {line}\n{HELP}")
+        except Exception as e:              # noqa: BLE001  (keep the console alive; the operator sees why)
+            print(f"ERROR {type(e).__name__}: {e}", flush=True)
+    node.destroy_node()
+    rclpy.shutdown()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

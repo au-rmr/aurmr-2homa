@@ -6,9 +6,10 @@ grasp_detection.py. Services (in the node's namespace):
   ~/stow ~/pick ~/update ~/reset_bin  perception_interfaces/BinItem
   ~/get_item           perception_interfaces/GetItem       mask + points of an item
   ~/detect_grasp       perception_interfaces/DetectGrasp   OptiGrasp on the item's bin crop
+  ~/list_items         perception_interfaces/ListItems     the inventory
 Two ROS domains in one process: the camera's images (<camera>/rgb/image_raw bgra8, <camera>/depth_to_rgb/image_raw
 16UC1 mm, <camera>/rgb/camera_info; ~300 MB/s at 3072P) arrive on the camera domain (camera_domain, loopback only, see
-docker/cyclonedds.xml); services, TF and everything else are on the robot domain (ROS_DOMAIN_ID). On the robot domain
+docker/cyclonedds_perception.xml); services, TF and everything else are on the robot domain (ROS_DOMAIN_ID). On the robot domain
 the node publishes the site calibration as a static TF base_link -> rgb_camera_link (the driver's own camera_base tree
 stays on the camera domain, so the two cannot clash).
 Parameters: camera, camera_domain, calibration (path), workcell (path), pod, uois_weights, optigrasp_weights, device,
@@ -21,7 +22,7 @@ import rclpy
 import yaml
 from geometry_msgs.msg import PointStamped, TransformStamped
 from message_filters import ApproximateTimeSynchronizer, Subscriber
-from perception_interfaces.srv import BinItem, DetectGrasp, GetItem
+from perception_interfaces.srv import BinItem, DetectGrasp, GetItem, ListItems
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.context import Context
 from rclpy.duration import Duration
@@ -83,7 +84,8 @@ class PodPerception(Node):
         for name, srv, cb in [("capture_empty_pod", Trigger, self.on_empty_pod), ("stow", BinItem, self.on_stow),
                               ("pick", BinItem, self.on_pick), ("update", BinItem, self.on_update),
                               ("reset_bin", BinItem, self.on_reset), ("get_item", GetItem, self.on_get_item),
-                              ("detect_grasp", DetectGrasp, self.on_detect_grasp)]:
+                              ("detect_grasp", DetectGrasp, self.on_detect_grasp),
+                              ("list_items", ListItems, self.on_list_items)]:
             self.create_service(srv, f"~/{name}", cb, callback_group=services)
         self.get_logger().info(f"waiting for {cam} images on domain {p['camera_domain']}")
 
@@ -207,6 +209,16 @@ class PodPerception(Node):
             res.success, res.message = True, f"{req.item_id} in {bin_id}: {int(mask.sum())} px"
         except Exception as e:                          # noqa: BLE001
             res.success, res.message = False, f"{type(e).__name__}: {e}"
+        return res
+
+    def on_list_items(self, req, res):
+        res.ready = self.tracker is not None
+        if res.ready:
+            items = sorted(self.tracker.items.items(), key=lambda kv: (kv[1][0], kv[1][1]))
+            res.item_ids = [k for k, _ in items]
+            res.bin_ids = [v[0] for _, v in items]
+            res.bad_bins = list(self.tracker.bad_bins)
+        res.bins_in_view = sorted(self.bounds, key=lambda b: (b[-1], int(b[:-1])))
         return res
 
     def on_detect_grasp(self, req, res):

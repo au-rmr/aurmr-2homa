@@ -8,5 +8,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   srv/BinItem.srv
   srv/GetItem.srv
   srv/DetectGrasp.srv
+  srv/ListItems.srv
   DEPENDENCIES geometry_msgs sensor_msgs)
 ament_package()
