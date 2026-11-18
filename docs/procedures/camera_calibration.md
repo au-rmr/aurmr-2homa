@@ -8,7 +8,8 @@ touch-calibrated pod model into the image (bin crops for the bin tracker).
 
 How: AprilTags (tag36h11, 36 mm black square) stay on the arm: 35 on the wrist-1 cap (`arm_forearm_link`), 43 on the
 wrist-3 cap (`arm_wrist_2_link`), 42 on the base-joint cap (`arm_shoulder_link`; on its own it only turns about one
-axis, so it helps but cannot calibrate alone). Caps belong to the motor housing, i.e. the link before the joint; the
+axis, so it helps but cannot calibrate alone; with only one other tag it makes the result worse, so use it with at
+least two others). Caps belong to the motor housing, i.e. the link before the joint; the
 solver finds the link from the data anyway. Flat surfaces only: a tag wrapped on a tube stops decoding off-axis.
 Per pose: the arm's link poses from TF + one camera frame. The solver fits one camera pose and each tag's pose on its
 link to all detected corners (camera intrinsics and distortion from the driver). Pod tags would not do: the pod moves.

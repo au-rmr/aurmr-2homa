@@ -1,0 +1,11 @@
+diff --git a/mask2former/__init__.py b/mask2former/__init__.py
+index 9b405c8..0c3ae84 100644
+--- a/mask2former/__init__.py
++++ b/mask2former/__init__.py
+@@ -23,4 +23,5 @@ from .maskformer_model import MaskFormer
+ from .test_time_augmentation import SemanticSegmentorWithTTA
+ 
+ # evaluation
+-from .evaluation.instance_evaluation import InstanceSegEvaluator
++# aurmr: evaluation needs detectron2 compiled ops (_C); training only
++# from .evaluation.instance_evaluation import InstanceSegEvaluator

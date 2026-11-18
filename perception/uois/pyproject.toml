@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uois"
+version = "0.1.0"
+description = "Bin item segmentation with per-item embeddings (multi-frame Mask2Former), inference only"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+# Also needs detectron2 @ 717ab9f + patches/ and Mask2Former @ 9b0651c on the path (see docker/perception/Dockerfile).
+dependencies = ["torch", "numpy", "scipy", "fvcore"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+uois = ["configs/*.yaml"]
