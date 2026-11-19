@@ -1,0 +1,50 @@
+# Role: planner (GPU host; lab: pinkman, sites/uw_lab/deployments/lab.yaml). Isaac Sim + Isaac Lab + MPPI/MCTS.
+# Image is built locally on the planner host and never pushed (NVIDIA Isaac Sim licence): docker/planner/Dockerfile.
+#   AURMR_HOST=pinkman docker compose -f compose/planner.yaml build planner_shell
+#   AURMR_HOST=pinkman docker compose -f compose/planner.yaml run --rm planner_shell          # headless shell
+#   AURMR_HOST=pinkman docker compose -f compose/planner.yaml --env-file ../sites/uw_lab/hosts/pinkman/display.env \
+#       run --rm planner_gui                                                                   # with the Isaac viewer
+x-planner: &planner
+  image: aurmr-2homa/planner:local
+  build: {context: .., dockerfile: docker/planner/Dockerfile}
+  network_mode: host
+  ipc: host
+  stop_signal: SIGINT
+  stop_grace_period: 30s
+  env_file: ["../sites/${AURMR_SITE:-uw_lab}/hosts/${AURMR_HOST:?set AURMR_HOST}/ros.env"]
+  environment:
+    NVIDIA_DRIVER_CAPABILITIES: all
+  deploy:
+    resources:
+      reservations:
+        devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+  volumes:
+    - ..:/repo:ro
+    - ${HOME}/aurmr-data:/data:ro
+    - planner_cache:/root/.cache       # Kit shader + extension caches: first start is slow, later ones reuse it
+  stdin_open: true
+  tty: true
+
+services:
+  planner_shell:
+    <<: *planner
+    profiles: [cli]
+    command: bash
+
+  planner_gui:
+    <<: *planner
+    profiles: [gui]
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: all
+      DISPLAY: ${DISPLAY:-}            # from display.env (--env-file); empty = no viewer
+      XAUTHORITY: /tmp/.Xauthority
+    volumes:
+      - ..:/repo:ro
+      - ${HOME}/aurmr-data:/data:ro
+      - planner_cache:/root/.cache
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${XAUTHORITY_HOST:-/dev/null}:/tmp/.Xauthority:ro
+    command: bash
+
+volumes:
+  planner_cache:

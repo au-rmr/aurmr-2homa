@@ -2,4 +2,4 @@ roles:
   control: emmons
   compute: inter
   gui: inter
-  planner: winthrop
+  planner: pinkman
