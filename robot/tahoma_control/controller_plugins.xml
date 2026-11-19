@@ -1,0 +1,7 @@
+<library path="streaming_velocity_controller">
+  <class name="tahoma_control/StreamingVelocityController"
+         type="tahoma_control::StreamingVelocityController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>Streamed joint velocities from motion_server: stale stop, velocity, acceleration and position limits.</description>
+  </class>
+</library>

@@ -31,3 +31,7 @@ class SensorStale(RobotError):
 
 class GuardLost(RobotError):
     pass
+
+
+class BadCommand(ExecutionFailed):
+    """A streamed command was not finite, named the wrong joints or was above the session's max velocity."""

@@ -6,6 +6,10 @@
 // and reads the arm's sensors there (the "hardware" node), and offers its action, the bond and
 // copies of joint states, force and speed scaling on the shared domain. Nothing else on the
 // robot network can reach the controllers.
+//
+// Streaming (S7): ~/stream holds a session in which an outside planner's joint velocities (shared
+// domain) are checked here and passed to the streaming velocity controller (private domain), which
+// stops the arm by itself if they stop coming. Trajectories and streaming never run together.
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -21,13 +25,16 @@
 
 #include "bondcpp/bond.hpp"
 #include "control_msgs/action/follow_joint_trajectory.hpp"
+#include "controller_manager_msgs/srv/switch_controller.hpp"
 #include "geometry_msgs/msg/wrench_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float64.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 #include "tahoma_interfaces/action/execute_trajectory.hpp"
+#include "tahoma_interfaces/action/stream_velocity.hpp"
 #include "tahoma_interfaces/srv/connect.hpp"
 
 using namespace std::chrono_literals;
@@ -37,10 +44,19 @@ using Connect = tahoma_interfaces::srv::Connect;
 using ExecuteHandle = rclcpp_action::ServerGoalHandle<Execute>;
 using FollowHandle = rclcpp_action::ClientGoalHandle<Follow>;
 using Result = Execute::Result;
+using Stream = tahoma_interfaces::action::StreamVelocity;
+using StreamHandle = rclcpp_action::ServerGoalHandle<Stream>;
+using Switch = controller_manager_msgs::srv::SwitchController;
 
 namespace
 {
 constexpr uint8_t kNoStop = 255;
+// Stream outcomes share Result's numbers where they mean the same; this one is streaming's own.
+constexpr uint8_t kBadCommand = Stream::Result::ABORTED_BAD_COMMAND;
+static_assert(Stream::Result::STOPPED_REQUEST == Result::STOPPED_REQUEST);
+static_assert(Stream::Result::ABORTED_FORCE_LIMIT == Result::ABORTED_FORCE_LIMIT);
+static_assert(Stream::Result::ABORTED_SENSOR_STALE == Result::ABORTED_SENSOR_STALE);
+static_assert(Stream::Result::ABORTED_GUARD_LOST == Result::ABORTED_GUARD_LOST);
 
 struct Force
 {
@@ -96,6 +112,17 @@ public:
     const auto joints_topic = declare_parameter("joints_topic", std::string("joint_states"));
     const auto scaling_topic = declare_parameter("speed_scaling_topic", std::string("speed_scaling"));
     const auto private_domain = declare_parameter("private_domain_id", -1);
+    // Streaming: empty stream_joints = no streaming on this hardware (the generic mock has no
+    // velocity interface). The ceiling caps any session's max_velocity.
+    stream_joints_ = declare_parameter("stream_joints", std::vector<std::string>{});
+    // Launch can't pass an empty list, so [""] also means none.
+    stream_joints_.erase(
+      std::remove(stream_joints_.begin(), stream_joints_.end(), std::string()), stream_joints_.end());
+    stream_controller_ = declare_parameter(
+      "stream_controller", std::string("streaming_velocity_controller"));
+    trajectory_controller_ = declare_parameter("trajectory_controller", std::string("arm_controller"));
+    max_stream_velocity_ = declare_parameter("max_stream_velocity", 0.25);
+    settle_velocity_ = declare_parameter("stream_settle_velocity", 0.005);
     if (names.size() != topics.size()) {
       throw std::runtime_error("signal_names and signal_topics differ in length");
     }
@@ -164,6 +191,27 @@ public:
     controller_ = hardware_ ?
       rclcpp_action::create_client<Follow>(hardware_, controller, hw_group_) :
       rclcpp_action::create_client<Follow>(this, controller, group_);
+    if (!stream_joints_.empty()) {
+      rclcpp::Node * h = hardware_ ? hardware_.get() : this;
+      auto cbg = hardware_ ? hw_group_ : group_;
+      switch_ = h->create_client<Switch>(
+        "/controller_manager/switch_controller", rclcpp::ServicesQoS(), cbg);
+      stream_out_ = h->create_publisher<std_msgs::msg::Float64MultiArray>(
+        "/" + stream_controller_ + "/commands", rclcpp::SystemDefaultsQoS());
+      stream_server_ = rclcpp_action::create_server<Stream>(
+        this, "~/stream",
+        [](const rclcpp_action::GoalUUID &, Stream::Goal::ConstSharedPtr) {
+          return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+        },
+        [this](std::shared_ptr<StreamHandle>) {
+          request_stop(Result::STOPPED_REQUEST);
+          return rclcpp_action::CancelResponse::ACCEPT;
+        },
+        [this](std::shared_ptr<StreamHandle> handle) {
+          std::thread([this, handle] {run_stream(handle);}).detach();
+        },
+        rcl_action_server_get_default_options(), group_);
+    }
     connect_service_ = create_service<Connect>(
       "~/connect",
       [this](Connect::Request::ConstSharedPtr req, Connect::Response::SharedPtr res) {
@@ -592,6 +640,238 @@ private:
     return true;
   }
 
+  // --- Streaming -----------------------------------------------------------------------------
+  std::string validate_stream(const Stream::Goal & goal)
+  {
+    if (!bond_ok_) {return "no demo holds the motion guard";}
+    {
+      std::lock_guard<std::mutex> lock(bond_mutex_);
+      if (goal.bond_id != bond_id_) {return "this client does not hold the motion guard";}
+    }
+    if (unresolved_) {return "the controller has not confirmed the last move ended";}
+    if (!(goal.max_velocity > 0) || !(goal.max_velocity <= max_stream_velocity_)) {
+      return "max_velocity is required: above 0, at most " + std::to_string(max_stream_velocity_);
+    }
+    if (!(goal.force_limit_n > 0) || !(goal.force_limit_n <= max_force_limit_)) {
+      return "force_limit_n is required: above 0, at most " + std::to_string(max_force_limit_);
+    }
+    if (goal.command_topic.empty()) {return "command_topic is required";}
+    const auto now = now_steady();
+    if ((now - last_wrench_).seconds() > wrench_stale_) {return "no recent wrench";}
+    if (recent_.size() < 3) {return "not enough wrench samples for a baseline";}
+    if (!joints_ || (now - last_joints_).seconds() > joints_stale_) {return "no recent joints";}
+    if (use_scaling_ && (now - last_scaling_).seconds() > scaling_stale_) {
+      return "no recent speed scaling";
+    }
+    return "";
+  }
+
+  // Activates one controller and deactivates the other, strictly. Empty string = done.
+  std::string switch_controllers(const std::string & on, const std::string & off)
+  {
+    if (!switch_->wait_for_service(1s)) {return "controller_manager is not available";}
+    auto req = std::make_shared<Switch::Request>();
+    req->activate_controllers = {on};
+    req->deactivate_controllers = {off};
+    req->strictness = Switch::Request::STRICT;
+    req->activate_asap = true;
+    req->timeout = rclcpp::Duration(2s);
+    auto res = switch_->async_send_request(req);
+    if (res.wait_for(3s) != std::future_status::ready) {return "controller switch did not answer";}
+    if (!res.get()->ok) {return "controller switch refused (" + on + " on, " + off + " off)";}
+    return "";
+  }
+
+  void send_stream(const std::vector<double> & v)
+  {
+    std_msgs::msg::Float64MultiArray m;
+    m.data = v;
+    stream_out_->publish(m);
+  }
+
+  // A planner command: reorder to stream_joints, check, pass on. Runs on the shared side.
+  void on_stream_command(const sensor_msgs::msg::JointState & msg, double max_velocity)
+  {
+    if (stop_reason_ != kNoStop) {return;}
+    std::vector<double> v(stream_joints_.size(), 0.0);
+    std::string problem;
+    if (msg.name.size() != msg.velocity.size()) {problem = "names and velocities differ in length";}
+    for (size_t i = 0; problem.empty() && i < stream_joints_.size(); ++i) {
+      const auto it = std::find(msg.name.begin(), msg.name.end(), stream_joints_[i]);
+      if (it == msg.name.end()) {problem = "command has no joint " + stream_joints_[i]; break;}
+      const double x = msg.velocity[it - msg.name.begin()];
+      if (!std::isfinite(x)) {problem = "command for " + stream_joints_[i] + " is not finite";}
+      else if (std::abs(x) > max_velocity) {
+        problem = "command for " + stream_joints_[i] + " is " + std::to_string(x) +
+          " rad/s, above the session's " + std::to_string(max_velocity);
+      }
+      v[i] = x;
+    }
+    if (problem.empty() && msg.name.size() != stream_joints_.size()) {
+      problem = "command names joints this arm does not stream";
+    }
+    if (!problem.empty()) {
+      if (request_stop(kBadCommand)) {
+        std::lock_guard<std::mutex> lock(stream_mutex_);
+        stream_problem_ = problem;
+      }
+      return;
+    }
+    send_stream(v);
+    std::lock_guard<std::mutex> lock(stream_mutex_);
+    ++stream_commands_;
+    last_command_ = now_steady();
+  }
+
+  void run_stream(std::shared_ptr<StreamHandle> handle)
+  {
+    auto result = std::make_shared<Stream::Result>();
+    result->outcome = Stream::Result::FAILED;
+    const auto goal = handle->get_goal();
+    auto reject = [&](const std::string & why, uint8_t outcome) {
+        result->outcome = outcome;
+        result->message = why;
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          if (joints_) {result->final_state = *joints_;}
+        }
+        if (handle->is_canceling()) {handle->canceled(result);} else {handle->succeed(result);}
+      };
+    if (busy_.exchange(true)) {return reject("another move is running", Stream::Result::REJECTED);}
+    std::string problem;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      problem = validate_stream(*goal);
+    }
+    if (!problem.empty()) {
+      busy_ = false;
+      return reject(problem, Stream::Result::REJECTED);
+    }
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      Force sum;
+      for (const auto & s : recent_) {sum.x += s.second.x; sum.y += s.second.y; sum.z += s.second.z;}
+      const double n = static_cast<double>(recent_.size());
+      baseline_ = Force{sum.x / n, sum.y / n, sum.z / n};
+      force_limit_ = goal->force_limit_n;
+      stop_force_ = 0;
+      active_signals_.clear();
+      fired_signal_.clear();
+      peak_ = 0;
+      stop_reason_ = kNoStop;
+      active_ = true;
+    }
+    {
+      std::lock_guard<std::mutex> lock(stream_mutex_);
+      stream_commands_ = 0;
+      stream_problem_.clear();
+      last_command_ = now_steady();
+    }
+    if (!bond_ok_) {request_stop(Result::ABORTED_GUARD_LOST);}
+    if (handle->is_canceling()) {request_stop(Result::STOPPED_REQUEST);}
+
+    problem = stop_reason_ == kNoStop ?
+      switch_controllers(stream_controller_, trajectory_controller_) : "";
+    bool switched = problem.empty() && stop_reason_ == kNoStop;
+    if (!problem.empty()) {
+      RCLCPP_ERROR(get_logger(), "streaming not started: %s", problem.c_str());
+      result->message = problem;
+    }
+    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr sub;
+    if (switched) {
+      rclcpp::SubscriptionOptions options;
+      options.callback_group = group_;
+      const double max_velocity = goal->max_velocity;
+      sub = create_subscription<sensor_msgs::msg::JointState>(
+        goal->command_topic, rclcpp::SensorDataQoS().keep_last(1),
+        [this, max_velocity](sensor_msgs::msg::JointState::ConstSharedPtr m) {
+          on_stream_command(*m, max_velocity);
+        }, options);
+      RCLCPP_INFO(get_logger(), "streaming from %s, max %.3f rad/s, force limit %.1f N",
+        goal->command_topic.c_str(), goal->max_velocity, goal->force_limit_n);
+      auto last_feedback = now_steady();
+      while (stop_reason_ == kNoStop && rclcpp::ok()) {
+        if (handle->is_canceling()) {request_stop(Result::STOPPED_REQUEST); break;}
+        std::this_thread::sleep_for(10ms);
+        const auto now = now_steady();
+        if ((now - last_feedback).seconds() >= 0.1) {
+          last_feedback = now;
+          auto fb = std::make_shared<Stream::Feedback>();
+          {
+            std::lock_guard<std::mutex> lock(stream_mutex_);
+            fb->commands = stream_commands_;
+            fb->command_age_s = (now - last_command_).seconds();
+          }
+          handle->publish_feedback(fb);
+        }
+      }
+      if (!rclcpp::ok()) {request_stop(Result::FAILED);}
+    }
+    // Stop: no more commands, zeros to the controller (it ramps down), wait until still, switch back.
+    sub.reset();
+    if (switched) {
+      const auto deadline = now_steady() + rclcpp::Duration(2s);
+      bool still = false;
+      while (!still && now_steady() < deadline) {
+        send_stream(std::vector<double>(stream_joints_.size(), 0.0));
+        std::this_thread::sleep_for(10ms);
+        std::lock_guard<std::mutex> lock(mutex_);
+        still = joints_ && !joints_->velocity.empty();
+        for (size_t i = 0; still && i < joints_->velocity.size(); ++i) {
+          still = std::abs(joints_->velocity[i]) < settle_velocity_;
+        }
+      }
+      if (!still) {RCLCPP_ERROR(get_logger(), "arm still moving 2 s after the stream stopped");}
+      std::vector<double> before;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (joints_) {before = joints_->position;}
+      }
+      const auto back = switch_controllers(trajectory_controller_, stream_controller_);
+      if (!back.empty()) {
+        RCLCPP_ERROR(get_logger(), "could not switch back to trajectories: %s", back.c_str());
+        result->message = "could not switch back to trajectories: " + back;
+      } else {
+        // The trajectory controller must hold where the stream left the arm (see ur_controllers.yaml
+        // set_last_command_interface_value_as_state_on_activation). A jump here is a config error.
+        std::this_thread::sleep_for(200ms);
+        std::lock_guard<std::mutex> lock(mutex_);
+        double jump = 0;
+        for (size_t i = 0; joints_ && i < before.size() && i < joints_->position.size(); ++i) {
+          jump = std::max(jump, std::abs(joints_->position[i] - before[i]));
+        }
+        if (jump > 0.01) {
+          RCLCPP_ERROR(get_logger(), "arm moved %.3f rad after switching back to trajectories", jump);
+          if (stop_reason_ == kNoStop || stop_reason_ == Result::STOPPED_REQUEST) {
+            stop_reason_ = Result::FAILED;
+          }
+          result->message = "arm moved " + std::to_string(jump) +
+            " rad when trajectories took over: check the trajectory controller's activation";
+        }
+      }
+    }
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (joints_) {result->final_state = *joints_;}
+      result->peak_force_n = peak_;
+      active_ = false;
+      if (stop_reason_ != kNoStop) {result->outcome = stop_reason_;}
+      if (peak_ > force_limit_ && result->outcome != Stream::Result::FAILED) {
+        result->outcome = Stream::Result::ABORTED_FORCE_LIMIT;
+      }
+    }
+    {
+      std::lock_guard<std::mutex> lock(stream_mutex_);
+      result->commands = stream_commands_;
+      if (result->message.empty()) {result->message = stream_problem_;}
+    }
+    if (result->message.empty() && result->outcome != Stream::Result::STOPPED_REQUEST) {
+      result->message = "stopped";
+    }
+    busy_ = false;
+    if (handle->is_canceling()) {handle->canceled(result);} else {handle->succeed(result);}
+  }
+
   // A cancel that reaches the controller after it has finished a goal, but before it has sent the
   // result, leaves that goal canceling with no result ever: realtime_tools 3.13 skips succeed
   // while canceling. A new goal that holds the current joints replaces it; once that one
@@ -649,6 +929,17 @@ private:
   rclcpp::Service<Connect>::SharedPtr connect_service_;
   rclcpp_action::Server<Execute>::SharedPtr server_;
   rclcpp::TimerBase::SharedPtr stale_timer_;
+
+  std::vector<std::string> stream_joints_;
+  std::string stream_controller_, trajectory_controller_;
+  double max_stream_velocity_, settle_velocity_;
+  rclcpp::Client<Switch>::SharedPtr switch_;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr stream_out_;
+  rclcpp_action::Server<Stream>::SharedPtr stream_server_;
+  std::mutex stream_mutex_;
+  uint64_t stream_commands_{0};
+  std::string stream_problem_;
+  rclcpp::Time last_command_{0, 0, RCL_STEADY_TIME};
 
   std::mutex bond_mutex_;
   std::unique_ptr<bond::Bond> bond_;

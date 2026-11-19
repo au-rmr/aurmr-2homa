@@ -1,0 +1,24 @@
+# A streaming session (S7): an outside planner sends joint velocities, motion_server checks them and
+# passes them to the streaming controller. The session lasts until it is cancelled or something stops it.
+# Forces are the change from the reading just before the session.
+string bond_id              # the guard this client holds
+string command_topic        # sensor_msgs/JointState on the shared domain: names + velocity, e.g. /mpc/joint_velocity_cmd
+float64 max_velocity        # rad/s per joint, required, > 0, at most the server's ceiling; above it ends the session (no clamping)
+float64 force_limit_n       # required, > 0, at most the server's max_force_limit_n. Passing it ends the session.
+---
+uint8 UNSET=0
+uint8 STOPPED_REQUEST=4     # cancelled by the client: the normal end
+uint8 ABORTED_FORCE_LIMIT=5
+uint8 ABORTED_SENSOR_STALE=6
+uint8 ABORTED_GUARD_LOST=7
+uint8 REJECTED=8
+uint8 FAILED=9
+uint8 ABORTED_BAD_COMMAND=11   # not finite, unknown or missing joint, or above max_velocity
+uint8 outcome
+string message
+float64 peak_force_n
+uint64 commands             # commands passed on
+sensor_msgs/JointState final_state
+---
+uint64 commands
+float64 command_age_s       # since the last command passed on; above the controller's stale timeout the arm is stopping

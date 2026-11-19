@@ -14,6 +14,8 @@ everything on the shared domain (debugging only: then anything on the network ca
 arm).
 """
 import os
+import tempfile
+import xml.etree.ElementTree as ET
 
 import yaml
 from ament_index_python.packages import get_package_share_directory as share
@@ -24,11 +26,32 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 from tahoma_moveit_config.model import robot_description, robot_semantic
+from tahoma_moveit_config.srdf import ARM_JOINTS
 
 
 def config(name):
     with open(os.path.join(share("tahoma_moveit_config"), "config", name)) as f:
         return yaml.safe_load(f)
+
+
+def stream_params(urdf):
+    """Joints and position limits of the streaming controller, from the robot description."""
+    limits = {}
+    for joint in ET.fromstring(urdf).iter("joint"):
+        limit = joint.find("limit")
+        if joint.get("name") in ARM_JOINTS and limit is not None:
+            limits[joint.get("name")] = (float(limit.get("lower")), float(limit.get("upper")))
+    missing = [j for j in ARM_JOINTS if j not in limits]
+    if missing:
+        raise RuntimeError(f"no position limits in the description for {missing}")
+    params = {"streaming_velocity_controller": {"ros__parameters": {
+        "joints": list(ARM_JOINTS),
+        "position_lower": [limits[j][0] for j in ARM_JOINTS],
+        "position_upper": [limits[j][1] for j in ARM_JOINTS]}}}
+    f = tempfile.NamedTemporaryFile("w", suffix="_stream.yaml", delete=False)
+    yaml.safe_dump(params, f)
+    f.close()
+    return f.name
 
 
 def setup(context):
@@ -93,7 +116,9 @@ def setup(context):
                           "use_speed_scaling": bool(scaling), "wrench_topic": wrench,
                           "joints_topic": "/joint_states",
                           "speed_scaling_topic": scaling or "speed_scaling",
-                          "private_domain_id": server_domain}]),
+                          "private_domain_id": server_domain,
+                          # Streaming needs the UR velocity interfaces (not on the generic mock).
+                          "stream_joints": list(ARM_JOINTS) if ur else [""]}]),
         # TF on the shared domain, from the joint states motion_server copies out.
         Node(package="robot_state_publisher", executable="robot_state_publisher",
              parameters=[description]),
@@ -116,6 +141,8 @@ def setup(context):
     if ur:
         nodes.append(spawner("speed_scaling_state_broadcaster", "force_torque_sensor_broadcaster",
                              "io_and_status_controller"))
+        nodes.append(spawner("streaming_velocity_controller", "--inactive",
+                             "--param-file", stream_params(urdf)))
     if real:
         nodes += [
             Node(package="ur_robot_driver", executable="dashboard_client", name="dashboard_client",

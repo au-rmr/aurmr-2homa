@@ -7,6 +7,7 @@ result = robot.move_straight((0, 0, .05), frame="tool", stop=Stop(contact=True, 
 """
 import math
 import os
+import contextlib
 import threading
 import time
 import uuid
@@ -31,15 +32,15 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.time import Time
 from sensor_msgs.msg import JointState
 from shape_msgs.msg import SolidPrimitive
-from tahoma_interfaces.action import ExecuteTrajectory
+from tahoma_interfaces.action import ExecuteTrajectory, StreamVelocity
 from tahoma_interfaces.srv import Connect
 from tahoma_moveit_config import workcell as W
 from tahoma_moveit_config.srdf import ARM_JOINTS
 from tf2_ros import Buffer, TransformListener
 
 from tahoma_robot import path_check
-from tahoma_robot.errors import (ExecutionFailed, ForceLimitExceeded, GuardLost, PartialPath,
-                                 PlanningFailed, RobotError, SensorStale, Stalled)
+from tahoma_robot.errors import (BadCommand, ExecutionFailed, ForceLimitExceeded, GuardLost,
+                                 PartialPath, PlanningFailed, RobotError, SensorStale, Stalled)
 
 GROUP = "manipulator"
 BASE = "base_link"
@@ -64,6 +65,10 @@ RETRY_CODES = (MoveItErrorCodes.INVALID_MOTION_PLAN, MoveItErrorCodes.FAILURE)
 HEARTBEAT_TIMEOUT_S = 0.5
 HEARTBEAT_PERIOD_S = 0.1
 _Out = ExecuteTrajectory.Result
+_SOut = StreamVelocity.Result
+# Streaming (S7). The session limit must be given; motion_server's ceiling is 0.25 rad/s.
+MAX_STREAM_VELOCITY = 0.25      # rad/s per joint
+DEFAULT_COMMAND_TOPIC = "/mpc/joint_velocity_cmd"
 
 
 @dataclass
@@ -105,6 +110,61 @@ def _rotate(q, v):
     return (v[0] + w * tx + y * tz - z * ty,
             v[1] + w * ty + z * tx - x * tz,
             v[2] + w * tz + x * ty - y * tx)
+
+
+class StreamSession:
+    """An open streaming session (Robot.streaming). Joint velocities arrive on the command topic,
+    from an outside planner or from send(); motion_server checks each one and the streaming
+    controller stops the arm by itself when they stop coming (0.15 s)."""
+
+    def __init__(self, robot, handle, topic):
+        self._robot = robot
+        self._handle = handle
+        self._result = handle.get_result_async()
+        self._pub = robot._node.create_publisher(JointState, topic, 1)
+        self.commands = 0          # passed on by motion_server (feedback, 10 Hz)
+        self.command_age_s = None  # since the last command passed on
+
+    def _on_feedback(self, fb):
+        self.commands = fb.feedback.commands
+        self.command_age_s = fb.feedback.command_age_s
+
+    def send(self, velocities):
+        """One command: {joint: rad/s} or a list in ARM_JOINTS order. Unlisted joints are an error."""
+        if not isinstance(velocities, dict):
+            velocities = dict(zip(ARM_JOINTS, velocities, strict=True))
+        msg = JointState(name=list(velocities), velocity=[float(v) for v in velocities.values()])
+        msg.header.stamp = self._robot._node.get_clock().now().to_msg()
+        self._pub.publish(msg)
+
+    def ended(self):
+        """True once motion_server has ended the session (a stop, an abort, a lost guard)."""
+        return self._result.done()
+
+    def check(self):
+        """Raises if motion_server ended the session for a reason other than a request."""
+        if self.ended():
+            self._robot._stream_outcome(self._result.result().result)
+
+    def wait(self, timeout=None):
+        """Waits until the session ends by itself; returns the Result or raises."""
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while not self.ended():
+            if deadline is not None and time.monotonic() > deadline:
+                return None
+            if self._robot._guard_lost.is_set():
+                raise GuardLost("the motion guard broke during streaming")
+            time.sleep(0.02)
+        return self._robot._stream_outcome(self._result.result().result)
+
+    def _close(self):
+        try:
+            if not self.ended():
+                self._robot._wait(self._handle.cancel_goal_async())
+            answer = self._robot._wait_guarded(self._result)
+            return self._robot._stream_outcome(answer.result)
+        finally:
+            self._robot._node.destroy_publisher(self._pub)
 
 
 class Scene:
@@ -213,6 +273,7 @@ class Robot:
         self._validity = self._node.create_client(GetStateValidity, "check_state_validity")
         self._connect = self._node.create_client(Connect, "motion_server/connect")
         self._execute = ActionClient(self._node, ExecuteTrajectory, "motion_server/execute")
+        self._stream = ActionClient(self._node, StreamVelocity, "motion_server/stream")
         self._executor = MultiThreadedExecutor()
         self._executor.add_node(self._node)
         self._spin = threading.Thread(target=self._executor.spin, daemon=True)
@@ -560,6 +621,62 @@ class Robot:
             if time.monotonic() - unknown_since > unknown_limit:
                 raise RobotError("timed out waiting for the robot stack")
             time.sleep(0.01)
+
+    @contextlib.contextmanager
+    def streaming(self, max_velocity, force_limit_n=None, command_topic=DEFAULT_COMMAND_TOPIC):
+        """Streams joint velocities from an outside planner (or session.send) until the block ends.
+
+            with robot.streaming(max_velocity=0.1) as s:
+                s.wait(timeout=600)      # planner on /mpc/joint_velocity_cmd does the work
+
+        max_velocity (rad/s per joint) is required: a command above it ends the session (no
+        clamping). force_limit_n: the change from the reading at the start; default the robot's.
+        On leaving the block the arm ramps to zero and trajectories are available again.
+        Raises like a move: ForceLimitExceeded, SensorStale, GuardLost, BadCommand, ExecutionFailed.
+        """
+        if not max_velocity or not 0 < max_velocity <= MAX_STREAM_VELOCITY:
+            raise ValueError(f"max_velocity is required, above 0 up to {MAX_STREAM_VELOCITY}")
+        force = float(force_limit_n or self.force_limit_n)
+        self._check_guard()
+        if not self._stream.wait_for_server(timeout_sec=TIMEOUT_S):
+            raise ExecutionFailed("motion_server offers no streaming on this hardware")
+        goal = StreamVelocity.Goal(bond_id=self._bond_id, command_topic=command_topic,
+                                   max_velocity=float(max_velocity), force_limit_n=force)
+        session_box = {}
+        handle = self._wait(self._stream.send_goal_async(
+            goal, feedback_callback=lambda fb: session_box["s"]._on_feedback(fb)
+            if "s" in session_box else None))
+        if not handle.accepted:
+            raise ExecutionFailed("motion server refused the stream")
+        session = StreamSession(self, handle, command_topic)
+        session_box["s"] = session
+        # Started once feedback flows; a refused session ends at once.
+        deadline = time.monotonic() + TIMEOUT_S
+        while session.command_age_s is None and not session.ended():
+            if time.monotonic() > deadline:
+                handle.cancel_goal_async()
+                raise RobotError("timed out waiting for the stream to start")
+            time.sleep(0.01)
+        session.check()
+        failed = True
+        try:
+            yield session
+            failed = False
+        finally:
+            try:
+                session._close()
+            except RobotError:
+                if not failed:
+                    raise   # else the block's own error is the one to see
+
+    def _stream_outcome(self, r):
+        joints = dict(zip(r.final_state.name, r.final_state.position))
+        if r.outcome == _SOut.STOPPED_REQUEST:
+            return Result("stopped", r.peak_force_n, joints)
+        errors = {_SOut.ABORTED_FORCE_LIMIT: ForceLimitExceeded,
+                  _SOut.ABORTED_SENSOR_STALE: SensorStale, _SOut.ABORTED_GUARD_LOST: GuardLost,
+                  _SOut.ABORTED_BAD_COMMAND: BadCommand}
+        raise errors.get(r.outcome, ExecutionFailed)(r.message or f"outcome {r.outcome}")
 
     def _wait_guarded(self, future):
         """Waits for future while the motion guard holds; raises GuardLost once it breaks."""
