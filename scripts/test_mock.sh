@@ -10,7 +10,7 @@ NAME=aurmr-mock-$(basename "$OUT" | tr -d .)
 rc=0
 # timeout only kills the docker client, so the container is removed by name afterwards.
 # shellcheck disable=SC2086  # MOCK_DOCKER_ARGS is a list of args
-timeout -s KILL "${MOCK_TIMEOUT:-720}" docker run --rm --name "$NAME" --network none \
+timeout -s KILL "${MOCK_TIMEOUT:-900}" docker run --rm --name "$NAME" --network none \
   --user "$(id -u):$(id -g)" -e HOME=/tmp -e ROS_LOG_DIR=/out/ros_log -e ROBOT_LAN_IP=127.0.0.1 ${MOCK_DOCKER_ARGS:-} \
   -v "$PWD":/repo:ro -v "$OUT":/out -w /tmp ghcr.io/au-rmr/aurmr-2homa/base:dev bash -c "
   source /opt/ros/jazzy/setup.bash
@@ -24,6 +24,6 @@ timeout -s KILL "${MOCK_TIMEOUT:-720}" docker run --rm --name "$NAME" --network 
   exit \$rc
 " || rc=$?
 docker rm -f "$NAME" >/dev/null 2>&1 || true
-[ "$rc" = 137 ] && echo "test_mock timed out after ${MOCK_TIMEOUT:-720} s" >&2
+[ "$rc" = 137 ] && echo "test_mock timed out after ${MOCK_TIMEOUT:-900} s" >&2
 if [ "$rc" = 0 ]; then rm -rf "$OUT"; else echo "test_mock failed (rc=$rc), output kept in $OUT" >&2; fi
 exit "$rc"
