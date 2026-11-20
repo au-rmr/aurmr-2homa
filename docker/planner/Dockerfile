@@ -42,6 +42,37 @@ RUN git clone --filter=blob:none --sparse https://github.com/ros-industrial/univ
     && rm -rf /tmp/ur
 ENV UR_DESCRIPTION_MESHES=/opt/ur_description/meshes
 
+# Isaac's default ground plane (Isaac Lab GroundPlaneCfg) + its textures, so the MPPI scene build needs no internet
+# (it downloaded these from NVIDIA's S3 at run time; test agent T33). Pinned by sha256 (files of 2025-10-14).
+# OmniPBR.mdl, also referenced, ships with Isaac Sim.
+ARG ISAAC_ASSETS=https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Environments/Grid
+RUN set -e; d=/opt/isaac_assets/Environments/Grid; mkdir -p $d/Materials/Textures; cd $d \
+    && curl -fsSL -o default_environment.usd ${ISAAC_ASSETS}/default_environment.usd \
+    && for t in WireframeBlur_basecolor WireframeBlur_blue Wireframe_blue; do \
+           curl -fsSL -o Materials/Textures/$t.png ${ISAAC_ASSETS}/Materials/Textures/$t.png; done \
+    && printf '%s\n' \
+       "8a21c317d638d33a4e6c20c958a7ed8f4d8c5195efd7e20f1b85178b4a15638a  default_environment.usd" \
+       "deab39088eaf39ed7be951966c5e6bd5e58b90ab64743b0cdc8e5579fd5a99d9  Materials/Textures/WireframeBlur_basecolor.png" \
+       "44fc0e82007bb0bd94631cd7ec45986a71ed74b9413899fbffac13efe151be4b  Materials/Textures/WireframeBlur_blue.png" \
+       "940b96ee8c8e53bd1acbc770d4ca0ac98bed9c96439ab386d1b27dbc9790cc4e  Materials/Textures/Wireframe_blue.png" \
+       > SHA256SUMS && sha256sum -c SHA256SUMS
+ENV BIN_CLEARING_GROUND_USD=/opt/isaac_assets/Environments/Grid/default_environment.usd
+
+# Kit extensions Isaac Lab @ ISAACLAB_COMMIT needs but isaacsim 5.1.0.0 does not ship (it has urdf importer 2.4.30,
+# Isaac Lab pins =2.4.31). Kit fetched them from NVIDIA's registry at EVERY run into the container (lost on exit) and
+# fails offline. Pinned by sha256; unpacked where Kit's registry puts them (run logs 2026-11-19).
+ARG KIT_REGISTRY=https://d4i3qtqj3r0z5.cloudfront.net
+RUN set -e; d=/opt/venv/lib/python3.11/site-packages/isaacsim/kit/data/Kit/Isaac-Sim/5.1/exts/3; mkdir -p $d; cd /tmp \
+    && curl -fsSL -o urdf.zip "${KIT_REGISTRY}/isaacsim.asset.importer.urdf-2.4.31%2B107.3.3.lx64.r.cp311.zip" \
+    && curl -fsSL -o pip.zip "${KIT_REGISTRY}/omni.kit.pip_archive-d38fa9ecd1fb6df4.zip" \
+    && printf '%s\n' "665cc13d48842ac6d0c203359819c1d5c767a1d920fb8a00179e147ec2fb5201  urdf.zip" \
+                     "3a0d0623be2349a2861f566dc8d5bdb5040c11b0977bb255c6d522b4be7bd682  pip.zip" | sha256sum -c - \
+    && python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" urdf.zip \
+           $d/isaacsim.asset.importer.urdf-2.4.31+107.3.3.lx64.r.cp311 \
+    && python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" pip.zip \
+           $d/omni.kit.pip_archive-0.0.0+69cbf6ad.lx64.cp311 \
+    && rm urdf.zip pip.zip
+
 # Bundled ROS 2 Jazzy (rclpy, Cyclone) from the isaacsim pip package.
 ENV OMNI_KIT_ACCEPT_EULA=YES \
     ROS_DISTRO=jazzy \

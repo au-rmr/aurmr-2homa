@@ -82,7 +82,10 @@ def _make_scene_cfg(
         },
         "ground": AssetBaseCfg(
             prim_path="/World/ground",
-            spawn=sim_utils.GroundPlaneCfg(),
+            # Local copy of Isaac's default ground (baked into the planner image, docker/planner/Dockerfile) instead of
+            # the runtime download from NVIDIA's S3 (crashes offline); unset -> Isaac Lab's default URL.
+            spawn=(sim_utils.GroundPlaneCfg(usd_path=os.environ["BIN_CLEARING_GROUND_USD"])
+                   if os.environ.get("BIN_CLEARING_GROUND_USD") else sim_utils.GroundPlaneCfg()),
             init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0)),
         ),
         "light": AssetBaseCfg(

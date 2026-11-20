@@ -1008,10 +1008,8 @@ class FilteredMPPIIsaacLabPlanner(MPPIIsaacLabPlanner):
                 parts.append(pos.cpu())
                 parts.append(quat.cpu())
             dof_state_bytes = torch_to_bytes(torch.cat(parts))
-        u_bytes = super().compute_action_tensor(dof_state_bytes, root_state_bytes)
-        u = bytes_to_torch(u_bytes).clone()
-        u[:-1] = 0.0   # DEBUG: zero all joints except wrist_3
-        return torch_to_bytes(u)
+        # Dropped here (Paolo, 2026-11-20: dead debug code): a line zeroing all joints but wrist_3.
+        return super().compute_action_tensor(dof_state_bytes, root_state_bytes)
 
 
 # ===========================================================================
@@ -1042,6 +1040,8 @@ def build_planner(scenario_path: str | None, solution_path: str | None, defer_so
         x0 = bin_center[0] - bs / 2
         y0 = bin_center[1] - bs / 2
         bin_positions = [is_["target_pos"]] + [o["pos"] for o in is_["obstacles"]]
+        # Kept verbatim (Paolo, 2026-11-20): the x/y swap and z offset look unused downstream, but this list also
+        # sets the block count (fallback: scene.py's fixed 5 blocks).
         block_positions = [[p[1] + x0, p[0] + y0, p[2] + 1.245] for p in bin_positions]
 
         # The exit boundary the cost function pushes toward must track the

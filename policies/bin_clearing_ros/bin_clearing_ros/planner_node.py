@@ -16,7 +16,16 @@ One episode per run, as the old pipeline: wait for poses + joint state, plan (se
 its own Isaac app), then start Isaac here and stream MPPI commands until the target has left the bin, a timeout, or
 Ctrl-C. Whether the arm moves is decided on the robot side: motion_server passes commands only during a streaming
 session that an operator holds (Robot.streaming / `tahoma stream`), and stops the arm on stale or bad commands.
-This node adds no safety of its own and does not clamp commands (open question, s7_design.md 6b MPPI finding 2).
+If the search's plan fails its verification (a simulated replay on this scene), the run ends "failed" (no retry; user
++ Paolo 2026-11-20). Commands are clamped to --max-command (default 0.1 rad/s, the old bridge's max_velocity) after
+MPPI's output filter, which overshoots MPPI's own u_max 0.08 (up to 0.133); each clamp is counted in the status. This is
+not a safety layer: the robot side still ends the session on any command above its limit.
+After the clamp, commands are smoothed as the old mppi_bridge did (exponential, alpha 0.2 per 1/20 s, rescaled by the
+time since the last command, i.e. a ~0.22 s time constant at any rate); a gap longer than --max-gap restarts it from
+zero (the robot side has ramped to zero by then). The planner needs the GPU to itself: before MPPI it reports GPU load
+from other jobs (warning only), and if the median gap over the first --rate-check-commands commands exceeds --max-gap
+(the robot side's stale limit) the run ends "failed". Status: command rate, gaps over --max-gap, and how often a
+command change needs more than --accel-ref rad/s^2 (the streaming controller's cap; reported only).
 """
 import argparse
 import io
@@ -49,6 +58,17 @@ def parse_args(argv):
                     help="joint state / poses older than this (receive time) -> no new command")
     ap.add_argument("--search-timeout", type=float, default=500.0, help="old puzzle_timeout_s")
     ap.add_argument("--mpc-timeout", type=float, default=1000.0, help="old isaaclabmpc_timeout_s")
+    ap.add_argument("--max-command", type=float, default=0.1,
+                    help="clamp |command| per joint to this (rad/s); old mppi_bridge max_velocity")
+    ap.add_argument("--smoothing-alpha", type=float, default=0.2, help="old bridge smoothing_alpha (0 < a <= 1; 1 = off)")
+    ap.add_argument("--smoothing-rate", type=float, default=20.0, help="rate (Hz) the alpha is defined at (old control_rate)")
+    ap.add_argument("--max-gap", type=float, default=0.15,
+                    help="robot side's stale limit (s): rate check threshold, gap counting, smoothing restart")
+    ap.add_argument("--rate-check-commands", type=int, default=10,
+                    help="median gap over this many first commands must be <= --max-gap, else fail (0 = no check)")
+    ap.add_argument("--accel-ref", type=float, default=0.5, help="streaming controller max_acceleration (reporting)")
+    ap.add_argument("--gpu-busy-util", type=float, default=20.0,
+                    help="GPU load (%%) before MPPI starts above which the node warns that another job is running")
     ap.add_argument("--viewer", action="store_true", help="search with the Isaac viewer (needs DISPLAY)")
     return ap.parse_known_args(argv)
 
@@ -111,6 +131,30 @@ def _b2t(b):
     return torch.load(io.BytesIO(b), weights_only=True)
 
 
+class Smoother:
+    """The old mppi_bridge's exponential smoothing, applied once per command instead of at 500 Hz.
+
+    alpha is defined per 1/rate s (bridge: 0.2 at control_rate 20) and rescaled by the time since the last command,
+    so the time constant (~0.22 s) does not depend on the planner's rate. After a gap longer than reset_gap (the robot
+    side's stale limit: it has ramped to zero) it restarts from zero, as the arm's velocity has.
+    """
+
+    def __init__(self, n, alpha, rate, reset_gap):
+        if not 0 < alpha <= 1 or rate <= 0:
+            raise ValueError("smoothing alpha must be in (0, 1] and rate > 0")
+        self.alpha, self.rate, self.reset_gap = alpha, rate, reset_gap
+        self.y, self.t = [0.0] * n, None
+
+    def __call__(self, u, t):
+        dt = 1.0 / self.rate if self.t is None else t - self.t
+        if self.t is not None and dt > self.reset_gap:
+            self.y, dt = [0.0] * len(u), 1.0 / self.rate
+        a = 1.0 - (1.0 - self.alpha) ** (max(dt, 0.0) * self.rate)
+        self.y = [a * x + (1.0 - a) * y for x, y in zip(u, self.y)]
+        self.t = t
+        return list(self.y)
+
+
 class PlannerNode:
     def __init__(self, args, ros_args):
         import rclpy
@@ -131,7 +175,9 @@ class PlannerNode:
         self.cmd_pub = self.node.create_publisher(JointState, args.command_topic, 10)
         self.status_pub = self.node.create_publisher(String, args.status_topic, 10)
         self.status = {"phase": "starting", "planner": args.planner, "step": None, "steps": None,
-                       "commands": 0, "message": ""}
+                       "commands": 0, "clamped": 0, "max_raw": 0.0, "rate_hz": None, "median_gap_s": None,
+                       "max_gap_s": None, "gaps_over_max": 0, "over_accel": 0, "max_accel": 0.0, "gpu": None,
+                       "message": ""}
         self.node.create_timer(1.0, self.publish_status)
         self.executor = SingleThreadedExecutor()
         self.executor.add_node(self.node)
@@ -199,9 +245,31 @@ class PlannerNode:
                                 f"({summary['result']['plan_time_s']:.0f} s)")
         return str(scenario), summary["solution_path"]
 
+    def check_gpu(self):
+        """GPU load + memory before our MPPI starts (the search child has exited): other jobs slow the planner."""
+        util, mem = [], None
+        for _ in range(5):
+            try:
+                out = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
+                                      "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=5).stdout
+                u, used, total = (float(x) for x in out.splitlines()[0].split(","))
+            except Exception as e:  # noqa: BLE001  (reporting only)
+                self.set_status(gpu={"error": str(e)}, message=f"WARNING could not read GPU load: {e}")
+                return
+            util.append(u)
+            mem = (used, total)
+            time.sleep(0.2)
+        util.sort()
+        gpu = {"util_pct": util[len(util) // 2], "mem_used_mib": mem[0], "mem_total_mib": mem[1]}
+        busy = gpu["util_pct"] > self.args.gpu_busy_util
+        self.set_status(gpu=gpu, message=(f"WARNING GPU busy before MPPI ({gpu['util_pct']:.0f} % load, "
+                                          f"{mem[0]:.0f} MiB used): another job will slow the planner"
+                                          if busy else f"GPU free ({gpu['util_pct']:.0f} % load)"))
+
     def run_mpc(self, scenario, solution):
         import torch
         from isaaclab.app import AppLauncher
+        self.check_gpu()
         self.set_status(phase="starting_mpc", message="starting Isaac for MPPI")
         AppLauncher(headless=True)
         from bin_clearing.mpc.stacked_bin.planner import build_planner
@@ -215,6 +283,8 @@ class PlannerNode:
         root = _t2b(torch.zeros(1, 13))
         t_end = time.monotonic() + self.args.mpc_timeout
         n = 0
+        smooth = Smoother(6, self.args.smoothing_alpha, self.args.smoothing_rate, self.args.max_gap)
+        gaps, last_sent, last_u = [], None, [0.0] * 6
         while time.monotonic() < t_end:
             q, dq, q_t, _, p_t, last_valid = self.inputs.snapshot()
             now = time.monotonic()
@@ -225,9 +295,37 @@ class PlannerNode:
                 continue
             state = torch.tensor(list(q) + list(dq) + [v for p in last_valid for v in p], dtype=torch.float32)
             u = _b2t(planner.compute_action_tensor(_t2b(state), root)).view(-1).cpu().tolist()
+            lim = self.args.max_command
+            raw = max(abs(x) for x in u)
+            if raw > lim:
+                u = [min(max(x, -lim), lim) for x in u]
+                self.status["clamped"] += 1
+            t = time.monotonic()
+            u = smooth(u, t)
             self.publish_command(u)
             n += 1
-            self.status.update(commands=n, step=int(getattr(planner.objective, "current_step", -1)))
+            if last_sent is not None:
+                gap = t - last_sent
+                gaps.append(gap)
+                acc = max(abs(a - b) for a, b in zip(u, last_u)) / gap
+                st = self.status
+                st["gaps_over_max"] += gap > self.args.max_gap
+                st["over_accel"] += acc > self.args.accel_ref
+                st["max_accel"] = max(st["max_accel"], acc)
+                srt = sorted(gaps)
+                st.update(median_gap_s=srt[len(srt) // 2], max_gap_s=srt[-1], rate_hz=1.0 / srt[len(srt) // 2])
+                k = self.args.rate_check_commands
+                if k > 0 and len(gaps) == k:
+                    med = sorted(gaps)[k // 2]
+                    if med > self.args.max_gap:
+                        self.publish_command([0.0] * 6)
+                        self.set_status(phase="failed", message=(
+                            f"planner too slow: median gap {med:.3f} s over the first {k} commands > "
+                            f"{self.args.max_gap} s (the robot side's stale limit); GPU shared? {self.status['gpu']}"))
+                        return False
+            last_sent, last_u = t, u
+            self.status.update(commands=n, max_raw=max(self.status["max_raw"], raw),
+                               step=int(getattr(planner.objective, "current_step", -1)))
             if planner.is_done():
                 self.publish_command([0.0] * 6)
                 self.set_status(phase="done", message=f"target left the bin after {n} commands")

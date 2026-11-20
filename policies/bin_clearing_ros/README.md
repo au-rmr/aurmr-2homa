@@ -26,7 +26,17 @@ One episode per run, as the old pipeline:
 Run records: `<out>/scenarios`, `<out>/solutions`, `<out>/plan.json`, `<out>/search.log` (repo `runs/`, gitignored).
 
 Safety is on the robot side, not here: commands move the arm only during a streaming session held by an operator,
-and motion_server + the streaming controller stop on stale, bad or over-limit commands. This node does not clamp.
+and motion_server + the streaming controller stop on stale, bad or over-limit commands. The node clamps commands to
+`--max-command` (0.1 rad/s, the old bridge's value) after MPPI's output filter and counts clamps in the status
+(`clamped`, `max_raw`), then smooths them as the old bridge did (alpha 0.2 per 1/20 s, rescaled by time: ~0.22 s
+time constant; `--smoothing-alpha 1` = off); that is matching the old setup, not safety.
+The planner needs pinkman's GPU to itself (the old demo ran at ~25 Hz; with another job on the GPU it runs at
+2.5-4 Hz). Before MPPI the node reports GPU load (warning above `--gpu-busy-util` 20 %); if the median gap over
+the first 10 commands is above `--max-gap` 0.15 s (= the robot side's stale limit) the run ends "failed"
+(`--rate-check-commands 0` turns the check off, e.g. for fake-cell runs on a shared GPU). Status also has
+`rate_hz`, `median_gap_s`, `max_gap_s`, `gaps_over_max`, `over_accel` / `max_accel` (command changes above the
+streaming controller's 0.5 rad/s^2, reported only).
+A plan that fails its verification ends the run "failed": no retry (user + Paolo 2026-11-20).
 
 ## Test without robot or cameras
 `tests/fake_cell.py`: kinematic arm following the commands + still cubes from a scenario YAML; `--exit-after N`
@@ -42,7 +52,8 @@ on this scene (heights snapped to stack levels, which the September runs' code d
 before MPC, as the pipeline would.
 
 ## Open (to decide with the planner's author)
-- Command rate ~3.6 Hz vs the robot side's 0.15 s stale limit; commands above the planner's own 0.08 rad/s limit
-  (up to 0.133, from the output filter) vs motion_server's max_velocity check. As is, a stream session would stop.
-- Search retry when the plan fails verification (new seed? re-perceive?): now the episode ends.
+- MPPI's rollouts assume ideal velocity tracking; the robot side smooths (0.22 s) and caps acceleration, so MPPI does
+  not score what runs (the old setup had the same mismatch). Options with the planner's author: run the rollout's
+  samples through the same filter, or a command-change cost (s7_design.md section 7, Q6).
+- If the planner is ever too slow for real time: send the planned horizon instead of one command (Q7).
 - The planner world frame `mpc_world` vs the robot's base frame: comes with the perception port (S7 stage 4).
