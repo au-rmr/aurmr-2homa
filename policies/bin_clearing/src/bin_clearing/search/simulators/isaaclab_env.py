@@ -760,7 +760,7 @@ class BinEnvIsaacLab(SimulatorEnv):
         Objects are placed one at a time with a short settle between each so
         that PhysX commits each teleport before the next object is inserted.
         """
-        from simulators.placement import random_initial_state
+        from .placement import random_initial_state
         self._refresh_all()
 
         state = random_initial_state(
@@ -917,7 +917,7 @@ class BinEnvIsaacLab(SimulatorEnv):
                 self._place_objects()
                 return self._get_state(0)
             if env_idx is not None:
-                from simulators.placement import random_initial_state
+                from .placement import random_initial_state
                 initial = random_initial_state(
                     self.n_obstacles,
                     obj_size=self._effective_obj_size,

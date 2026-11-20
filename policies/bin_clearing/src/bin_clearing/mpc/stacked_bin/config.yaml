@@ -21,10 +21,10 @@ nx: 12
 goal: [0.40, 0.10, 1.00]
 
 # # Path to the MTCS solution JSON that defines the push sequence
-solution_path: "/home/paolo/Documents/isaaclabmpc/examples/ur16e_stacked_robot/stacked_blockers.json"
+solution_path: null   # set by the caller (build_planner): the search's solution JSON
 # solution_path: "/home/paolo/Documents/puzzle/outputs/latest/solutions/stacked_middle_target.json"
 # solution_path: "/home/paolo/Documents/puzzle/outputs/_demo1/server_scenario.json"
-# solution_path: "/home/paolo/Documents/isaaclabmpc/examples/ur16e_stacked_robot/stacked_blockers.json"
+# solution_path: null   # set by the caller (build_planner): the search's solution JSON
 # End-effector body name in the Isaac Lab articulation.
 # With merge_fixed_joints=True in UrdfFileCfg, tool0/flange are merged
 # into wrist_3_link, so we reference wrist_3_link here.
@@ -61,7 +61,7 @@ isaaclab:
   # Minimum: 2 * 1.25m (table half-extent) + margin = 3.0m
   env_spacing: 5.0
 headless: False
-stand_urdf: "/home/paolo/Documents/isaaclabmpc/assets/fixed_assets/stand/stand.urdf"
+stand_urdf: null   # unused: make_static_cfgs has the stand URDF commented out (boxes instead)
 bin_size: 0.4       # set to a float (e.g. 0.27) to spawn bin walls; null = no walls
 bin_center: [0.55, 0.275]  # [x, y] in MPPI world frame — center of the bin
 # Tracking Filter

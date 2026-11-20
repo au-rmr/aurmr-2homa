@@ -2,7 +2,7 @@
 import torch
 import pytest
 
-from isaaclab_mpc.cost import (
+from bin_clearing.mpc.isaaclab_mpc.cost import (
     DistCost,
     OrientationCost,
     HeightMatchCost,
@@ -13,7 +13,7 @@ from isaaclab_mpc.cost import (
     GaussianProjection,
     AboveObjectCost,
 )
-from isaaclab_mpc.cost.utils import quat_apply, quat_to_yaw_pitch
+from bin_clearing.mpc.isaaclab_mpc.cost.utils import quat_apply, quat_to_yaw_pitch
 
 B = 16
 torch.manual_seed(0)

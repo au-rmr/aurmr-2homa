@@ -19,3 +19,36 @@ Copied from his research repos at the commits the demo ran:
 
 `ORIGIN.txt` lists every copied file with its source and checksum. The first commit is the verbatim copy; every
 change after it is in git history.
+
+## Changes from the original (second commit; `git log -p` has the details)
+Only what it takes to run as a package inside the planner image; no algorithm or parameter changed.
+- Imports made package-relative; `sys.path` hacks removed. MORE raises NotImplementedError (not used by the demo).
+- `search/real_robot.py` (was puzzle `pipeline.py`): the real-robot pose -> bin-frame conversion, planning +
+  verification and the scenario YAML, code unchanged; the zerorpc bridge server, subprocess orchestration, wandb,
+  CSV, video and benchmark metrics are gone (the ROS 2 node replaces them).
+- `search/solution.py` (was puzzle `main.py`): only `save_solution` and its helpers.
+- `mpc/stacked_bin/planner.py`: the module-level AppLauncher + argparse and the zerorpc server are replaced by
+  `build_planner(scenario_path, solution_path)`; the caller launches Isaac first. `config.yaml`: absolute
+  `/home/paolo` paths set to null (solution given by the caller; the stand URDF was unused).
+- `mpc/assets/robots/ur16e.py`: uses the meshes at `$UR_DESCRIPTION_MESHES` (set in the planner image).
+
+## Running
+Inside the planner image (`compose/planner.yaml`; `PYTHONPATH` includes `policies/bin_clearing/src`). Isaac allows
+one app per process, so the search and the MPPI planner run in separate processes, as in the original pipeline.
+```
+python -m bin_clearing.search --scenario <scenario.yaml> --out <dir>    # -> <dir>/solutions/server_scenario.json
+```
+```python
+from isaaclab.app import AppLauncher; app = AppLauncher(headless=True).app      # first
+from bin_clearing.mpc.stacked_bin.planner import build_planner
+planner = build_planner("<scenario.yaml>", "<dir>/solutions/server_scenario.json")
+u = planner.compute_action_tensor(state_bytes, root_bytes)   # torch.save bytes, as the old bridge sent
+```
+
+## Checks (2026-11-19, against the original at the pinned commits, on the lab's reference runs)
+- Search, run `5obs_stacked2_mcts_05`, seed 42: same plan bit for bit as the original's usual result (4 of 5
+  original runs; the 5th moved the second push point 4.7 mm: GPU physics). The solution file is equal except the
+  replayed step poses, which vary by ~6 mm between original runs too.
+- MPPI, same scene + solution: first command identical, second within 1.4e-7; after that runs diverge, as two
+  runs of the original do (not repeatable run to run).
+Harnesses and data: the lab's reference set `mpc_mcts_real_robot_2026-09` (not in this repo).

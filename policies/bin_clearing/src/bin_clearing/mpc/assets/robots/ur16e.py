@@ -36,6 +36,21 @@ _ASSETS_DIR = os.path.join(
 )
 UR16E_URDF_PATH = os.path.normpath(os.path.join(_ASSETS_DIR, "ur16e.urdf"))
 
+# aurmr-2homa: the meshes are not in this repo (identical to ros-industrial/universal_robot @ 6507bb6
+# ur_description/meshes; the planner image puts them at $UR_DESCRIPTION_MESHES). The URDF refers to them as
+# "../meshes/...", so write a copy with absolute mesh paths to a writable cache dir and use that.
+_MESHES = os.environ.get("UR_DESCRIPTION_MESHES")
+if _MESHES:
+    import tempfile as _tempfile
+    _patched_dir = os.path.join(_tempfile.gettempdir(), "bin_clearing_urdf")
+    os.makedirs(_patched_dir, exist_ok=True)
+    _patched = os.path.join(_patched_dir, "ur16e.urdf")
+    with open(UR16E_URDF_PATH) as _f:
+        _text = _f.read().replace('filename="../meshes/', f'filename="{os.path.abspath(_MESHES)}/')
+    with open(_patched, "w") as _f:
+        _f.write(_text)
+    UR16E_URDF_PATH = _patched
+
 
 def get_tool_length() -> float:
     """Return the TCP tip distance (metres) from the tool0 link in the URDF.

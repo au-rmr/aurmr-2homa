@@ -32,7 +32,7 @@ import time
 import torch
 from tqdm import tqdm
 
-from simulators import SimulatorEnv
+from .simulators import SimulatorEnv
 
 
 # Action types and their sampling weights
@@ -287,7 +287,7 @@ class _PlannerBase:
         """Instantiate the correct planner from a Hydra config."""
         aw = cfg.planner.get('action_weights', None)
         if cfg.planner.name == 'alphazero':
-            from alphazero.pusher import AlphaZeroPusher
+            from .alphazero.pusher import AlphaZeroPusher  # not ported yet (checkpoint pending)
             return AlphaZeroPusher(
                 env=env,
                 solver_net_path=cfg.planner.checkpoint,
@@ -317,7 +317,8 @@ class _PlannerBase:
                 prune_plan=prune,
             )
         if cfg.planner.name == 'more':
-            from more.planner import MOREPlanner
+            raise NotImplementedError('MORE is not part of the demo (Paolo, 2026-11-19) and was not ported')
+            from more.planner import MOREPlanner  # noqa: F401  (original, unreachable)
             return MOREPlanner(
                 env=env,
                 ppn_path=cfg.planner.get('ppn_checkpoint', None),

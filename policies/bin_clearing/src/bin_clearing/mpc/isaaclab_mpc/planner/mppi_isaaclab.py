@@ -22,8 +22,8 @@ import torch
 
 from mppi_torch.mppi import MPPIPlanner
 
-from isaaclab_mpc.planner.isaaclab_wrapper import IsaacLabWrapper, IsaacLabConfig
-from isaaclab_mpc.utils.transport import torch_to_bytes, bytes_to_torch
+from bin_clearing.mpc.isaaclab_mpc.planner.isaaclab_wrapper import IsaacLabWrapper, IsaacLabConfig
+from bin_clearing.mpc.isaaclab_mpc.utils.transport import torch_to_bytes, bytes_to_torch
 
 
 def _euler_xyz_to_quat_wxyz(euler_xyz) -> torch.Tensor:

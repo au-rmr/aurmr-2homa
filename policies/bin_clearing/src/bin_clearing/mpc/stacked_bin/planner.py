@@ -1,43 +1,13 @@
-"""MPPI planner server for the UR16e reach task (Isaac Lab backend).
-
-Analogous to genesismpc/examples/ur5_stick_stand/planner.py.
-
-Run with:
-    cd /home/paolo/Documents/isaaclabmpc
-    conda activate env_isaaclab
-    python examples/ur16e_reach/planner.py
-
-The server listens on tcp://0.0.0.0:4242 and accepts the same zerorpc
-calls as the genesismpc planner (compute_action_tensor, set_goal, …).
+"""MPPI planner for the stacked-bin task (UR16e, Isaac Lab backend). Original: Paolo Torrado, isaaclabmpc @ 52c09b4
+examples/ur16e_stacked_robot/planner.py (a zerorpc server). Here: build_planner() returns the planner object; the
+caller (bin_clearing's ROS 2 node) owns the process and the transport.
 
 IMPORTANT
 ---------
-Isaac Lab requires AppLauncher to be created and the simulation app started
-BEFORE any isaaclab modules are imported.  All isaaclab imports therefore
-appear AFTER the AppLauncher block below.
+Isaac Lab requires the simulation app to be running BEFORE any isaaclab module is imported: launch it first
+(isaaclab.app.AppLauncher(headless=True)), then import this module. One app per process: the search
+(bin_clearing.search) runs in a separate process.
 """
-
-# ===========================================================================
-# 1. Simulator bootstrap  — must happen first
-# ===========================================================================
-import argparse
-
-from isaaclab.app import AppLauncher
-
-parser = argparse.ArgumentParser(description="UR16e MPPI reach planner (Isaac Lab)")
-parser.add_argument("--scenario", type=str, default=None,
-                    help="Path to a puzzles YAML scenario file. "
-                         "Overrides the hardcoded block positions in scene.py.")
-parser.add_argument("--solution_path", type=str, default=None,
-                    help="Path to puzzle solution JSON. Overrides cfg.solution_path.")
-parser.add_argument("--defer_solution", action="store_true",
-                    help="Start without a solution; receive steps via reset_episode() RPC.")
-AppLauncher.add_app_launcher_args(parser)
-args_cli, _ = parser.parse_known_args()
-args_cli.headless = True   # planner always runs headless
-
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
 
 # ===========================================================================
 # 2. All other imports (safe now that the app is running)
@@ -48,7 +18,6 @@ import time
 
 import torch
 import yaml
-import zerorpc
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -56,26 +25,21 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-# Make project root importable regardless of cwd
-_PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
-
 import json
 
 from mppi_torch.mppi import MPPIConfig
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.sim import RigidBodyPropertiesCfg
-from isaaclab_mpc.planner.mppi_isaaclab import MPPIIsaacLabPlanner
-from isaaclab_mpc.planner.isaaclab_wrapper import IsaacLabConfig
-from isaaclab_mpc.cost import (
+from bin_clearing.mpc.isaaclab_mpc.planner.mppi_isaaclab import MPPIIsaacLabPlanner
+from bin_clearing.mpc.isaaclab_mpc.planner.isaaclab_wrapper import IsaacLabConfig
+from bin_clearing.mpc.isaaclab_mpc.cost import (
     DistCost, OrientationCost, HeightMatchCost, PushAlignCost,
     ContactForceCost, JointVelCost, SingularityCost, GaussianProjection,
     TcpFloorCost, AboveObjectCost,
 )
-from isaaclab_mpc.cost.utils import quat_apply
-from assets.robots.ur16e import make_ur16e_cfg, get_tool_length
-from examples.ur16e_stacked_robot.scene import (
+from bin_clearing.mpc.isaaclab_mpc.cost.utils import quat_apply
+from bin_clearing.mpc.assets.robots.ur16e import make_ur16e_cfg, get_tool_length
+from bin_clearing.mpc.stacked_bin.scene import (
     make_static_cfgs, make_block_cfgs, make_bin_wall_rigid_cfgs,
     _bin_to_mppi_local, _BLOCK_SPECS,
 )
@@ -222,7 +186,7 @@ def _load_config(yaml_path: str) -> PlannerConfig:
         cfg.isaaclab = IsaacLabCfg(
             dt=il.get("dt", 1.0 / 60.0),
             visualize_rollouts=il.get("visualize_rollouts", True),
-            render=not args_cli.headless,
+            render=False,  # original: not args_cli.headless, which the script always forced to True
             env_spacing=il.get("env_spacing", 1.5),
         )
 
@@ -982,7 +946,7 @@ class FilteredMPPIIsaacLabPlanner(MPPIIsaacLabPlanner):
         return bool(getattr(self.objective, 'target_exited', False))
 
     def compute_action_tensor(self, dof_state_bytes, root_state_bytes):
-        from isaaclab_mpc.utils.transport import bytes_to_torch, torch_to_bytes
+        from bin_clearing.mpc.isaaclab_mpc.utils.transport import bytes_to_torch, torch_to_bytes
         dof_state = bytes_to_torch(dof_state_bytes)
         DOF = self.sim.num_dof
         offset = DOF * 2
@@ -1054,14 +1018,15 @@ class FilteredMPPIIsaacLabPlanner(MPPIIsaacLabPlanner):
 # 6. Main
 # ===========================================================================
 
-def main():
-    cfg_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+def build_planner(scenario_path: str | None, solution_path: str | None, defer_solution: bool = False,
+                  cfg_path: str | None = None) -> 'FilteredMPPIIsaacLabPlanner':
+    """The original main() without the zerorpc server: returns the planner (call compute_action_tensor on it)."""
+    cfg_path = cfg_path or os.path.join(os.path.dirname(__file__), "config.yaml")
     cfg = _load_config(cfg_path)
 
-    if args_cli.solution_path:
-        cfg.solution_path = args_cli.solution_path
+    if solution_path:
+        cfg.solution_path = solution_path
 
-    scenario_path = args_cli.scenario
     block_positions = None
     bin_size = cfg.bin_size        # default from config.yaml; scenario overrides below
     bin_center = cfg.bin_center
@@ -1134,7 +1099,7 @@ def main():
     )
 
     objective = Objective(cfg, table_surface_z=table_surface_z,
-                          steps_override=[] if args_cli.defer_solution else None,
+                          steps_override=[] if defer_solution else None,
                           n_blocks=n_blocks)
     planner = FilteredMPPIIsaacLabPlanner(
         cfg,
@@ -1150,12 +1115,4 @@ def main():
         ),
     )
 
-    server = zerorpc.Server(planner)
-    server.bind("tcp://0.0.0.0:4242")
-    print("[planner] Stacked-blocks MPPI server listening on tcp://0.0.0.0:4242")
-    server.run()
-
-
-if __name__ == "__main__":
-    main()
-    simulation_app.close()
+    return planner

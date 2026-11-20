@@ -33,6 +33,15 @@ RUN git clone https://github.com/isaac-sim/IsaacLab.git /opt/IsaacLab \
 RUN uv pip install --no-deps "mppi_torch @ git+https://github.com/tud-amr/mppi_torch.git@75e17e87fd42a803d3227258d14c4231cbcbc0ec" \
     && uv pip install numpy==1.23.5 scipy==1.15.3 ghalton==0.6.1 hydra-core==1.3.2 omegaconf==2.3.0 pyyaml h5py
 
+# UR16e meshes for policies/bin_clearing (its URDF is in the repo; meshes identical to upstream, BSD-3-Clause).
+ARG UR_DESCRIPTION_COMMIT=6507bb6756d0065d49b76230ff55f875f099a827
+RUN git clone --filter=blob:none --sparse https://github.com/ros-industrial/universal_robot.git /tmp/ur \
+    && git -C /tmp/ur checkout ${UR_DESCRIPTION_COMMIT} \
+    && git -C /tmp/ur sparse-checkout set ur_description/meshes/ur10e ur_description/meshes/ur16e \
+    && mkdir -p /opt/ur_description && cp -r /tmp/ur/ur_description/meshes /opt/ur_description/ \
+    && rm -rf /tmp/ur
+ENV UR_DESCRIPTION_MESHES=/opt/ur_description/meshes
+
 # Bundled ROS 2 Jazzy (rclpy, Cyclone) from the isaacsim pip package.
 ENV OMNI_KIT_ACCEPT_EULA=YES \
     ROS_DISTRO=jazzy \
@@ -40,7 +49,7 @@ ENV OMNI_KIT_ACCEPT_EULA=YES \
     CYCLONEDDS_URI=file:///etc/cyclonedds.xml \
     ISAAC_ROS2=/opt/venv/lib/python3.11/site-packages/isaacsim/exts/isaacsim.ros2.bridge/jazzy
 ENV LD_LIBRARY_PATH=${ISAAC_ROS2}/lib \
-    PYTHONPATH=${ISAAC_ROS2}/rclpy
+    PYTHONPATH=${ISAAC_ROS2}/rclpy:/repo/policies/bin_clearing/src
 COPY docker/cyclonedds.xml /etc/cyclonedds.xml
 # Vulkan + EGL loaders need NVIDIA's ICD files; the container toolkit mounts the driver libraries
 # (NVIDIA_DRIVER_CAPABILITIES=all) but not these. Without them Kit has no GPU device (no viewer, no GPU PhysX).
