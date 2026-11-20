@@ -128,9 +128,11 @@ def test_stale_commands_stop_the_arm_and_fresh_ones_resume(robot):
 # --- Bad commands end the session (no clamping) ------------------------------------------------
 @pytest.mark.parametrize("command", [
     wrist_only(0.2),                                        # above the session's 0.1
+    wrist_only(-0.2),                                       # same, other direction (T30: mutant m03)
     wrist_only(float("nan")),
     {j: 0.0 for j in ARM_JOINTS[:-1]},                      # a joint missing
     {**wrist_only(0.0), "not_a_joint": 0.0},                # a stranger
+    {**{j: 0.0 for j in ARM_JOINTS[1:]}, "not_a_joint": 0.0},  # one joint renamed: right count (T30: m05)
 ])
 def test_bad_command_ends_the_session(robot, command):
     with pytest.raises(BadCommand):
@@ -186,6 +188,23 @@ CLIENT = textwrap.dedent("""
 """)
 
 
+def last_motion(trace):
+    """Time of the last position change in [(t, position)]. One sample that leaves the pose and comes straight back
+    is skipped: when arm_controller takes over, the mock hardware reports its stale pre-session position command for
+    one cycle (T30: every session end, the whole streamed distance). The UR driver resets that command on the switch
+    (ur_robot_driver 3.10.0 hardware_interface.cpp:1510), so it is a mock artefact, not motion."""
+    last = 0.0
+    for i in range(1, len(trace)):
+        t, x = trace[i]
+        if abs(x - trace[i - 1][1]) <= 1e-6:
+            continue
+        blip_out = i + 1 < len(trace) and abs(trace[i + 1][1] - trace[i - 1][1]) <= 1e-6
+        blip_back = i >= 2 and abs(x - trace[i - 2][1]) <= 1e-6 and abs(trace[i - 1][1] - x) > 1e-3
+        if not (blip_out or blip_back):
+            last = t
+    return last
+
+
 def test_killed_client_stops_the_arm_and_guard_can_reconnect(sensors):
     sensors.reset()
     p = subprocess.Popen([sys.executable, "-c", CLIENT, WORKCELL], stdout=subprocess.PIPE, text=True)
@@ -199,19 +218,17 @@ def test_killed_client_stops_the_arm_and_guard_can_reconnect(sensors):
         p.send_signal(signal.SIGKILL)
         p.wait()
         killed = time.monotonic()
-        last_change, previous = killed, hw.wrist()
+        trace = [(0.0, hw.wrist())]
         while time.monotonic() - killed < 1.5:
             time.sleep(0.01)
-            now = hw.wrist()
-            if abs(now - previous) > 1e-6:
-                last_change = time.monotonic()
-            previous = now
+            trace.append((time.monotonic() - killed, hw.wrist()))
     finally:
         hw.close()
         if p.poll() is None:
             p.kill()
-    print(f"stopped {last_change - killed:.3f} s after the kill")
-    assert last_change - killed < 0.5, "commands stop with the client: 0.15 s stale + 0.1 s ramp"
+    stopped = last_motion(trace)
+    print(f"stopped {stopped:.3f} s after the kill")
+    assert stopped < 0.5, "commands stop with the client: 0.15 s stale + 0.1 s ramp"
     time.sleep(1.0)   # the guard frees when the server sees the bond die
     with Robot.connect("capcup", LIMIT, WORKCELL) as r:
         r.go_named(START, speed=0.8)
