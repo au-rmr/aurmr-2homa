@@ -1,0 +1,48 @@
+Files copied VERBATIM (commit "bin_clearing: verbatim copy") from Paolo Torrado's research repos, MIT (user,
+2026-11-19). sha256 prefix, path here, source. Later commits change them; `git log -p -- <file>` shows every change.
+UR16e meshes are NOT copied: identical to ros-industrial/universal_robot @ 6507bb6 ur_description/meshes/{ur10e,ur16e}
+(checked by sha256 2026-11-19); the planner image fetches them there.
+
+01ba4719c80b  src/bin_clearing/mpc/assets/robots/__init__.py  <-  isaaclabmpc @ 52c09b4: assets/robots/__init__.py
+7b692f2773c7  src/bin_clearing/mpc/assets/robots/ur16e.py  <-  isaaclabmpc @ 52c09b4: assets/robots/ur16e.py
+acabb24b519c  src/bin_clearing/mpc/assets/robots/ur_description/urdf/ur16e.urdf  <-  isaaclabmpc @ 52c09b4: assets/robots/ur_description/urdf/ur16e.urdf
+755f1afcc9c1  src/bin_clearing/mpc/isaaclab_mpc/__init__.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/__init__.py
+61670b769b0a  src/bin_clearing/mpc/isaaclab_mpc/cost/__init__.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/__init__.py
+2c8050521fe0  src/bin_clearing/mpc/isaaclab_mpc/cost/above_object_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/above_object_cost.py
+1e9063d3dee7  src/bin_clearing/mpc/isaaclab_mpc/cost/contact_force_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/contact_force_cost.py
+444d4541062d  src/bin_clearing/mpc/isaaclab_mpc/cost/dist_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/dist_cost.py
+d0094abcaecb  src/bin_clearing/mpc/isaaclab_mpc/cost/gaussian_projection.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/gaussian_projection.py
+5a2032afc314  src/bin_clearing/mpc/isaaclab_mpc/cost/height_match_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/height_match_cost.py
+c445e29b9910  src/bin_clearing/mpc/isaaclab_mpc/cost/joint_vel_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/joint_vel_cost.py
+281bd65c12ae  src/bin_clearing/mpc/isaaclab_mpc/cost/orientation_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/orientation_cost.py
+d7d6855363cc  src/bin_clearing/mpc/isaaclab_mpc/cost/push_align_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/push_align_cost.py
+5ba69437a3b5  src/bin_clearing/mpc/isaaclab_mpc/cost/singularity_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/singularity_cost.py
+cac5c0d4c966  src/bin_clearing/mpc/isaaclab_mpc/cost/tcp_floor_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/tcp_floor_cost.py
+36d7c2956454  src/bin_clearing/mpc/isaaclab_mpc/cost/test_costs.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/test_costs.py
+878c6db409c7  src/bin_clearing/mpc/isaaclab_mpc/cost/tof_clearance_cost.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/tof_clearance_cost.py
+ad3656b960db  src/bin_clearing/mpc/isaaclab_mpc/cost/utils.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/cost/utils.py
+e3b0c44298fc  src/bin_clearing/mpc/isaaclab_mpc/planner/__init__.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/planner/__init__.py
+00352040483d  src/bin_clearing/mpc/isaaclab_mpc/planner/isaaclab_wrapper.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/planner/isaaclab_wrapper.py
+f1415625b166  src/bin_clearing/mpc/isaaclab_mpc/planner/mppi_isaaclab.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/planner/mppi_isaaclab.py
+e3b0c44298fc  src/bin_clearing/mpc/isaaclab_mpc/utils/__init__.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/utils/__init__.py
+226c63348f1e  src/bin_clearing/mpc/isaaclab_mpc/utils/isaac_stubs.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/utils/isaac_stubs.py
+01de90c3ef16  src/bin_clearing/mpc/isaaclab_mpc/utils/transport.py  <-  isaaclabmpc (patorrad/isaaclabmpc) @ 52c09b4: isaaclab_mpc/utils/transport.py
+e3b0c44298fc  src/bin_clearing/mpc/stacked_bin/__init__.py  <-  isaaclabmpc @ 52c09b4: ur16e_stacked_robot/__init__.py
+38bd0c1bf3a1  src/bin_clearing/mpc/stacked_bin/config.yaml  <-  isaaclabmpc @ 52c09b4: ur16e_stacked_robot/config.yaml
+1d85c050135f  src/bin_clearing/mpc/stacked_bin/planner.py  <-  isaaclabmpc @ 52c09b4: ur16e_stacked_robot/planner.py
+d6becf2a5f81  src/bin_clearing/mpc/stacked_bin/scene.py  <-  isaaclabmpc @ 52c09b4: ur16e_stacked_robot/scene.py
+9877594860e2  src/bin_clearing/search/conf/config.yaml  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: conf/config.yaml
+bc0f7d940a66  src/bin_clearing/search/conf/pipeline.yaml  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: conf/pipeline.yaml
+b4d44b435a52  src/bin_clearing/search/conf/pipeline_real_robot.yaml  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: conf/pipeline_real_robot.yaml
+0b905842aafb  src/bin_clearing/search/conf/planner/alphazero.yaml  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: conf/planner/alphazero.yaml
+46ab3ec05bb4  src/bin_clearing/search/conf/planner/mcts.yaml  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: conf/planner/mcts.yaml
+c61aae020e3f  src/bin_clearing/search/conf/reward/default.yaml  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: conf/reward/default.yaml
+22398f126813  src/bin_clearing/search/conf/simulator/isaaclab.yaml  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: conf/simulator/isaaclab.yaml
+e912a8bb838b  src/bin_clearing/search/main.py  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: main.py
+4be68734f229  src/bin_clearing/search/pipeline.py  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: pipeline.py
+80c9698c64f1  src/bin_clearing/search/planner.py  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: planner.py
+d9d1951ec533  src/bin_clearing/search/simulators/__init__.py  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: simulators/__init__.py
+1ec838000e70  src/bin_clearing/search/simulators/base_env.py  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: simulators/base_env.py
+822cf04b1269  src/bin_clearing/search/simulators/isaaclab_env.py  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: simulators/isaaclab_env.py
+eae240b89a93  src/bin_clearing/search/simulators/placement.py  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: simulators/placement.py
+4e80f7bb2ffa  src/bin_clearing/search/simulators/shapes.py  <-  puzzle (patorrad/puzzles) @ 60e5fc6, branch MORE: simulators/shapes.py
