@@ -49,6 +49,13 @@ def robot_description(site_dir, tool, mock_start=None, hardware=None, robot_ip="
     urdf = xacro.process_file(
         os.path.join(share("tahoma_description"), "urdf", "tahoma.urdf.xacro"),
         mappings=mappings).toxml()
+    if hardware == "ur_mock":
+        # The UR description's mock = mock_components/GenericSystem, which jumps back to a stale position command
+        # when streaming ends; ours switches modes like ur_robot_driver (tahoma_control/src/ur_like_mock_system.cpp).
+        generic = "<plugin>mock_components/GenericSystem</plugin>"
+        if urdf.count(generic) != 1:
+            raise RuntimeError(f"ur_mock: expected one {generic} in the UR description, found {urdf.count(generic)}")
+        urdf = urdf.replace(generic, "<plugin>tahoma_control/UrLikeMockSystem</plugin>")
     if hardware == "mock":
         initial = _named_pose(site_dir, mock_start or "home")
         urdf = urdf.replace("</robot>", _mock_hardware(initial) + "</robot>")

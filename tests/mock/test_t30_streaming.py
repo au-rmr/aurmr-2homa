@@ -16,7 +16,7 @@ import rclpy
 from tahoma_moveit_config.srdf import ARM_JOINTS
 from tahoma_robot import ForceLimitExceeded, Robot
 
-from test_streaming import MAX, RATE, START, WRIST, Streamer, wrist_only
+from test_streaming import MAX, RATE, SCENE, START, WRIST, Streamer, wrist_only
 from test_zz_motion import LIMIT, WORKCELL, Sensors
 
 CONTROLLER = "streaming_velocity_controller"
@@ -137,7 +137,7 @@ def wrist_vector(v):
 # --- The controller's own command checks (motion_server bypassed) --------------------------------
 def test_direct_valid_command_moves_the_arm(robot, private):
     """Control for the tests below: the private path really reaches the arm."""
-    with robot.streaming(max_velocity=MAX):
+    with robot.streaming(max_velocity=MAX, collision_scene=SCENE):
         moved = private.moved_while(lambda: private.send(wrist_vector(0.05), 0.6))
     assert moved > 0.015, f"moved {moved:.4f} rad"
 
@@ -150,21 +150,21 @@ def test_direct_valid_command_moves_the_arm(robot, private):
     [0.05] * (len(ARM_JOINTS) - 1),         # wrong size
 ])
 def test_direct_bad_command_latches_until_reactivated(robot, private, bad):
-    with robot.streaming(max_velocity=MAX):
+    with robot.streaming(max_velocity=MAX, collision_scene=SCENE):
         moved_bad = private.moved_while(lambda: private.send(bad, 0.3))
         # A good command after a bad one must not move the arm: the latch holds.
         moved_after = private.moved_while(lambda: private.send(wrist_vector(0.05), 0.6))
     assert moved_bad < 1e-4, f"moved {moved_bad:.4f} rad on a bad command"
     assert moved_after < 1e-4, f"moved {moved_after:.4f} rad after a bad command: latch lost"
     # A new session activates the controller again: the latch is cleared.
-    with robot.streaming(max_velocity=MAX):
+    with robot.streaming(max_velocity=MAX, collision_scene=SCENE):
         moved_new = private.moved_while(lambda: private.send(wrist_vector(0.05), 0.6))
     assert moved_new > 0.015, f"new session moved only {moved_new:.4f} rad"
 
 
 def test_requested_stop_ramps_down_at_once(robot, private):
     """Leaving the block stops the arm by motion_server's zeros, not by waiting for the 0.15 s stale timeout."""
-    with robot.streaming(max_velocity=MAX) as s:
+    with robot.streaming(max_velocity=MAX, collision_scene=SCENE) as s:
         st = Streamer(s, wrist_only(MAX))
         time.sleep(0.6)
         # The planner keeps sending (as a real one would while the demo stops); motion_server must stop relaying.
@@ -187,7 +187,7 @@ def test_requested_stop_ramps_down_at_once(robot, private):
 def test_force_during_the_stop_ramp_still_raises(robot, private, sensors):
     """A requested stop wins the stop reason, but a force over the limit while ramping down must not be lost."""
     with pytest.raises(ForceLimitExceeded):
-        with robot.streaming(max_velocity=MAX, force_limit_n=30) as s:
+        with robot.streaming(max_velocity=MAX, collision_scene=SCENE, force_limit_n=30) as s:
             st = Streamer(s, wrist_only(MAX))
             time.sleep(0.5)
             s._robot._wait(s._handle.cancel_goal_async())    # stop reason: request
@@ -208,7 +208,7 @@ def max_acceleration(samples):
 
 
 def test_velocity_steps_are_ramped_up_and_down(robot, private):
-    with robot.streaming(max_velocity=MAX) as s:
+    with robot.streaming(max_velocity=MAX, collision_scene=SCENE) as s:
         t0 = private.now()
         st = Streamer(s, wrist_only(MAX))
         time.sleep(0.6)
@@ -234,7 +234,7 @@ def test_position_limit_stops_and_latches_and_only_away_is_allowed(robot, privat
     robot.go_joints(dict(robot.joints(), **{WRIST: limit - sign * 3 * MARGIN}), speed=0.8)
     try:
         # Towards the limit: stops at about the margin (minus the ramp-down distance, 0.01 rad).
-        with robot.streaming(max_velocity=MAX) as s:
+        with robot.streaming(max_velocity=MAX, collision_scene=SCENE) as s:
             st = Streamer(s, wrist_only(sign * MAX))
             time.sleep(2.5)                         # 0.1 rad at 0.1 rad/s would take 1 s
             st.velocities = wrist_only(-sign * 0.05)  # away: still latched, must not move
@@ -248,7 +248,7 @@ def test_position_limit_stops_and_latches_and_only_away_is_allowed(robot, privat
         assert inside(latched_at) < 2 * MARGIN, "control: the arm got near the limit"
         assert moved_away_latched < 1e-4, "latched controller moved"
         # New session, inside the margin: towards the limit is refused at once ...
-        with robot.streaming(max_velocity=MAX) as s:
+        with robot.streaming(max_velocity=MAX, collision_scene=SCENE) as s:
             st = Streamer(s, wrist_only(sign * 0.05))
             a = private.wrist()
             time.sleep(0.6)
@@ -256,7 +256,7 @@ def test_position_limit_stops_and_latches_and_only_away_is_allowed(robot, privat
             st.stop()
         assert towards < 1e-3, f"moved {towards:.4f} rad towards the limit inside the margin"
         # ... and away is allowed.
-        with robot.streaming(max_velocity=MAX) as s:
+        with robot.streaming(max_velocity=MAX, collision_scene=SCENE) as s:
             st = Streamer(s, wrist_only(-sign * 0.05))
             a = private.wrist()
             time.sleep(0.8)
@@ -286,7 +286,7 @@ DEMO = textwrap.dedent("""
     import sys, time
     from tahoma_robot import Robot
     with Robot.connect("capcup", 50.0, sys.argv[1]) as r:
-        with r.streaming(max_velocity=0.1) as s:
+        with r.streaming(max_velocity=0.1, collision_scene=sys.argv[2]) as s:
             print("streaming", flush=True)
             s.wait(timeout=600)
 """)
@@ -295,7 +295,7 @@ DEMO = textwrap.dedent("""
 def test_killed_demo_stops_the_arm_while_the_planner_keeps_streaming(sensors, private):
     sensors.reset()
     planner = subprocess.Popen([sys.executable, "-c", PLANNER], stdout=subprocess.PIPE, text=True)
-    demo = subprocess.Popen([sys.executable, "-c", DEMO, WORKCELL], stdout=subprocess.PIPE,
+    demo = subprocess.Popen([sys.executable, "-c", DEMO, WORKCELL, SCENE], stdout=subprocess.PIPE,
                             text=True)
     try:
         assert planner.stdout.readline().strip() == "planning"

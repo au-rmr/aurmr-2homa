@@ -39,7 +39,7 @@ from tahoma_moveit_config.srdf import ARM_JOINTS
 from tf2_ros import Buffer, TransformListener
 
 from tahoma_robot import path_check
-from tahoma_robot.errors import (BadCommand, ExecutionFailed, ForceLimitExceeded, GuardLost,
+from tahoma_robot.errors import (BadCommand, CollisionPredicted, ExecutionFailed, ForceLimitExceeded, GuardLost,
                                  PartialPath, PlanningFailed, RobotError, SensorStale, Stalled)
 
 GROUP = "manipulator"
@@ -69,6 +69,7 @@ _SOut = StreamVelocity.Result
 # Streaming (S7). The session limit must be given; motion_server's ceiling is 0.25 rad/s.
 MAX_STREAM_VELOCITY = 0.25      # rad/s per joint
 DEFAULT_COMMAND_TOPIC = "/mpc/joint_velocity_cmd"
+DEFAULT_COLLISION_TOPIC = "/collision_monitor/status"
 
 
 @dataclass
@@ -623,17 +624,24 @@ class Robot:
             time.sleep(0.01)
 
     @contextlib.contextmanager
-    def streaming(self, max_velocity, force_limit_n=None, command_topic=DEFAULT_COMMAND_TOPIC):
+    def streaming(self, max_velocity, collision_scene, force_limit_n=None, command_topic=DEFAULT_COMMAND_TOPIC,
+                  collision_topic=DEFAULT_COLLISION_TOPIC):
         """Streams joint velocities from an outside planner (or session.send) until the block ends.
 
-            with robot.streaming(max_velocity=0.1) as s:
+            with robot.streaming(max_velocity=0.1, collision_scene="limits_full,pod_partial") as s:
                 s.wait(timeout=600)      # planner on /mpc/joint_velocity_cmd does the work
 
         max_velocity (rad/s per joint) is required: a command above it ends the session (no
-        clamping). force_limit_n: the change from the reading at the start; default the robot's.
+        clamping). collision_scene is required: the scene the collision monitor must be checking (its
+        `scene` parameter); the session starts only on a fresh clear status for it and stops on a
+        predicted collision (CollisionPredicted) or a silent monitor (SensorStale).
+        force_limit_n: the change from the reading at the start; default the robot's.
         On leaving the block the arm ramps to zero and trajectories are available again.
-        Raises like a move: ForceLimitExceeded, SensorStale, GuardLost, BadCommand, ExecutionFailed.
+        Raises like a move: ForceLimitExceeded, SensorStale, GuardLost, BadCommand, CollisionPredicted,
+        ExecutionFailed.
         """
+        if not collision_scene:
+            raise ValueError("collision_scene is required (the collision monitor's scene)")
         if not max_velocity or not 0 < max_velocity <= MAX_STREAM_VELOCITY:
             raise ValueError(f"max_velocity is required, above 0 up to {MAX_STREAM_VELOCITY}")
         force = float(force_limit_n or self.force_limit_n)
@@ -641,7 +649,8 @@ class Robot:
         if not self._stream.wait_for_server(timeout_sec=TIMEOUT_S):
             raise ExecutionFailed("motion_server offers no streaming on this hardware")
         goal = StreamVelocity.Goal(bond_id=self._bond_id, command_topic=command_topic,
-                                   max_velocity=float(max_velocity), force_limit_n=force)
+                                   max_velocity=float(max_velocity), force_limit_n=force,
+                                   collision_status_topic=collision_topic, collision_scene=collision_scene)
         session_box = {}
         handle = self._wait(self._stream.send_goal_async(
             goal, feedback_callback=lambda fb: session_box["s"]._on_feedback(fb)
@@ -675,7 +684,7 @@ class Robot:
             return Result("stopped", r.peak_force_n, joints)
         errors = {_SOut.ABORTED_FORCE_LIMIT: ForceLimitExceeded,
                   _SOut.ABORTED_SENSOR_STALE: SensorStale, _SOut.ABORTED_GUARD_LOST: GuardLost,
-                  _SOut.ABORTED_BAD_COMMAND: BadCommand}
+                  _SOut.ABORTED_BAD_COMMAND: BadCommand, _SOut.ABORTED_COLLISION: CollisionPredicted}
         raise errors.get(r.outcome, ExecutionFailed)(r.message or f"outcome {r.outcome}")
 
     def _wait_guarded(self, future):

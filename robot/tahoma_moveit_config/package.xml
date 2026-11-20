@@ -8,6 +8,8 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
   <exec_depend>tahoma_control</exec_depend>
+  <exec_depend>tahoma_interfaces</exec_depend>
+  <exec_depend>moveit_py</exec_depend>
   <exec_depend>tahoma_description</exec_depend>
   <exec_depend>moveit_ros_move_group</exec_depend>
   <exec_depend>rviz2</exec_depend>

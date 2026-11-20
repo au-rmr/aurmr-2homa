@@ -1,7 +1,7 @@
 """Robot bringup: ros2_control, motion_server, MoveIt.
 
 Args: site_dir (absolute), tool, hardware, robot_ip, start_pose, wrench_topic, speed_scaling_topic,
-headless_mode, private_domain.
+headless_mode, private_domain, collision_scene.
 hardware: ur (the real arm), ur_mock (the UR driver's mock: same controllers, no arm),
 mock (generic mock with a plain trajectory controller).
 
@@ -139,6 +139,11 @@ def setup(context):
                           name="robot_state_publisher_private", parameters=[description],
                           additional_env=private_env))
     if ur:
+        # Streamed motion is checked for collisions by its own node (motion_server has no robot model).
+        with open(os.path.join(site, "workcell.yaml")) as f:
+            monitor_scene = get("collision_scene") or yaml.safe_load(f)["collision_monitor"]["scene"]
+        nodes.append(Node(package="tahoma_moveit_config", executable="collision_monitor", output="screen",
+                          parameters=[{"site_dir": site, "tool": tool, "scene": monitor_scene}]))
         nodes.append(spawner("speed_scaling_state_broadcaster", "force_torque_sensor_broadcaster",
                              "io_and_status_controller"))
         nodes.append(spawner("streaming_velocity_controller", "--inactive",
@@ -170,6 +175,8 @@ def generate_launch_description():
         DeclareLaunchArgument("hardware", default_value="ur_mock"),
         DeclareLaunchArgument("robot_ip", default_value=""),   # default: the site's arm.yaml
         DeclareLaunchArgument("start_pose", default_value="home"),
+        # The collision monitor's scene (streaming); default: workcell.yaml collision_monitor.scene.
+        DeclareLaunchArgument("collision_scene", default_value=""),
         DeclareLaunchArgument("wrench_topic", default_value=""),
         DeclareLaunchArgument("speed_scaling_topic", default_value=""),
         # true: the driver sends its own program, no tablet program needed. URSim tests use it;

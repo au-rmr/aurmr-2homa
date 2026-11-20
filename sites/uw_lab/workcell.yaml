@@ -54,6 +54,12 @@ pods:
     # Scenes pod_bins_soft_<bin> (e.g. pod_bins_soft_2h): that bin's walls this far out, no lip.
     canvas_allowance: 0.02
 
+# Collision monitor for streamed motion (S7, tahoma_moveit_config/collision_monitor.py): the scene it checks by
+# default. Stream sessions must name it (Robot.streaming(collision_scene=...)). Only rigid things: the bin and the
+# cubes a demo pushes are left out on purpose.
+collision_monitor:
+  scene: limits_full,pod_partial
+
 scenes:
   pod_partial: [pod_col_01, pod_col_05, pod_top_strut, back_frame]   # the pod's rigid parts + the robot's frame
 

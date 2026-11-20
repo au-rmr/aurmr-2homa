@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+"""Entry point: tahoma_moveit_config.collision_monitor."""
+from tahoma_moveit_config.collision_monitor import main
+
+main()

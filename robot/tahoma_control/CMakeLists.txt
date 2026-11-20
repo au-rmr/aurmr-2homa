@@ -34,4 +34,12 @@ target_link_libraries(streaming_velocity_controller
 pluginlib_export_plugin_description_file(controller_interface controller_plugins.xml)
 install(TARGETS streaming_velocity_controller
   LIBRARY DESTINATION lib ARCHIVE DESTINATION lib RUNTIME DESTINATION bin)
+
+# Mock arm (ur_mock) that switches modes like ur_robot_driver: no jump back to a stale position command.
+add_library(ur_like_mock_system SHARED src/ur_like_mock_system.cpp)
+target_link_libraries(ur_like_mock_system
+  hardware_interface::hardware_interface hardware_interface::mock_components pluginlib::pluginlib)
+pluginlib_export_plugin_description_file(hardware_interface hardware_plugins.xml)
+install(TARGETS ur_like_mock_system
+  LIBRARY DESTINATION lib ARCHIVE DESTINATION lib RUNTIME DESTINATION bin)
 ament_package()

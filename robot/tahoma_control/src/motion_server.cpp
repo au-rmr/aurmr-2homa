@@ -19,6 +19,7 @@
 #include <memory>
 #include <future>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -35,6 +36,7 @@
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include "tahoma_interfaces/action/execute_trajectory.hpp"
 #include "tahoma_interfaces/action/stream_velocity.hpp"
+#include "tahoma_interfaces/msg/collision_status.hpp"
 #include "tahoma_interfaces/srv/connect.hpp"
 
 using namespace std::chrono_literals;
@@ -53,6 +55,7 @@ namespace
 constexpr uint8_t kNoStop = 255;
 // Stream outcomes share Result's numbers where they mean the same; this one is streaming's own.
 constexpr uint8_t kBadCommand = Stream::Result::ABORTED_BAD_COMMAND;
+constexpr uint8_t kCollision = Stream::Result::ABORTED_COLLISION;
 static_assert(Stream::Result::STOPPED_REQUEST == Result::STOPPED_REQUEST);
 static_assert(Stream::Result::ABORTED_FORCE_LIMIT == Result::ABORTED_FORCE_LIMIT);
 static_assert(Stream::Result::ABORTED_SENSOR_STALE == Result::ABORTED_SENSOR_STALE);
@@ -123,6 +126,9 @@ public:
     trajectory_controller_ = declare_parameter("trajectory_controller", std::string("arm_controller"));
     max_stream_velocity_ = declare_parameter("max_stream_velocity", 0.25);
     settle_velocity_ = declare_parameter("stream_settle_velocity", 0.005);
+    // Collision monitor (tahoma_moveit_config/collision_monitor.py): its status must stay fresh and clear.
+    collision_stale_ = declare_parameter("collision_stale_s", 0.1);
+    collision_wait_ = declare_parameter("collision_wait_s", 2.0);
     if (names.size() != topics.size()) {
       throw std::runtime_error("signal_names and signal_topics differ in length");
     }
@@ -656,6 +662,9 @@ private:
       return "force_limit_n is required: above 0, at most " + std::to_string(max_force_limit_);
     }
     if (goal.command_topic.empty()) {return "command_topic is required";}
+    if (goal.collision_status_topic.empty() || goal.collision_scene.empty()) {
+      return "collision_status_topic and collision_scene are required";
+    }
     const auto now = now_steady();
     if ((now - last_wrench_).seconds() > wrench_stale_) {return "no recent wrench";}
     if (recent_.size() < 3) {return "not enough wrench samples for a baseline";}
@@ -679,6 +688,21 @@ private:
     auto res = switch_->async_send_request(req);
     if (res.wait_for(3s) != std::future_status::ready) {return "controller switch did not answer";}
     if (!res.get()->ok) {return "controller switch refused (" + on + " on, " + off + " off)";}
+    return "";
+  }
+
+  // Empty if the monitor's last status is fresh, clear and for this scene; else why not.
+  // A reason starting with "silent" means no recent status (a stale sensor, not a collision).
+  std::string collision_problem(const std::string & scene)
+  {
+    std::lock_guard<std::mutex> lock(collision_mutex_);
+    if (!collision_) {return "silent: no status yet";}
+    const double age = (now_steady() - last_collision_).seconds();
+    if (age > collision_stale_) {return "silent for " + std::to_string(age) + " s";}
+    if (collision_->scene != scene) {
+      return "checks scene '" + collision_->scene + "', the session needs '" + scene + "'";
+    }
+    if (!collision_->clear) {return collision_->reason.empty() ? "not clear" : collision_->reason;}
     return "";
   }
 
@@ -770,6 +794,42 @@ private:
     if (!bond_ok_) {request_stop(Result::ABORTED_GUARD_LOST);}
     if (handle->is_canceling()) {request_stop(Result::STOPPED_REQUEST);}
 
+    // The collision monitor: subscribe now, start only on a fresh clear status for the session's scene.
+    rclcpp::Subscription<tahoma_interfaces::msg::CollisionStatus>::SharedPtr collision_sub;
+    {
+      std::lock_guard<std::mutex> lock(collision_mutex_);
+      collision_.reset();
+    }
+    {
+      rclcpp::SubscriptionOptions options;
+      options.callback_group = group_;
+      collision_sub = create_subscription<tahoma_interfaces::msg::CollisionStatus>(
+        goal->collision_status_topic, rclcpp::QoS(10),
+        [this](tahoma_interfaces::msg::CollisionStatus::ConstSharedPtr m) {
+          std::lock_guard<std::mutex> lock(collision_mutex_);
+          collision_ = *m;
+          last_collision_ = now_steady();
+        }, options);
+    }
+    problem.clear();
+    if (stop_reason_ == kNoStop) {
+      const auto deadline = now_steady() + rclcpp::Duration::from_seconds(collision_wait_);
+      problem = "no status from the collision monitor on " + goal->collision_status_topic;
+      while (now_steady() < deadline && !handle->is_canceling()) {
+        problem = collision_problem(goal->collision_scene);
+        if (problem.empty()) {break;}
+        std::this_thread::sleep_for(10ms);
+      }
+    }
+    if (!problem.empty()) {
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        active_ = false;
+      }
+      busy_ = false;
+      return reject("collision monitor: " + problem, Stream::Result::REJECTED);
+    }
+
     problem = stop_reason_ == kNoStop ?
       switch_controllers(stream_controller_, trajectory_controller_) : "";
     bool switched = problem.empty() && stop_reason_ == kNoStop;
@@ -794,6 +854,15 @@ private:
         if (handle->is_canceling()) {request_stop(Result::STOPPED_REQUEST); break;}
         std::this_thread::sleep_for(10ms);
         const auto now = now_steady();
+        const auto collision = collision_problem(goal->collision_scene);
+        if (!collision.empty()) {
+          const bool silent = collision.rfind("silent", 0) == 0;
+          if (request_stop(silent ? Result::ABORTED_SENSOR_STALE : kCollision)) {
+            std::lock_guard<std::mutex> lock(stream_mutex_);
+            stream_problem_ = "collision monitor: " + collision;
+          }
+          break;
+        }
         if ((now - last_feedback).seconds() >= 0.1) {
           last_feedback = now;
           auto fb = std::make_shared<Stream::Feedback>();
@@ -809,6 +878,7 @@ private:
     }
     // Stop: no more commands, zeros to the controller (it ramps down), wait until still, switch back.
     sub.reset();
+    collision_sub.reset();
     if (switched) {
       const auto deadline = now_steady() + rclcpp::Duration(2s);
       bool still = false;
@@ -834,12 +904,20 @@ private:
       } else {
         // The trajectory controller must hold where the stream left the arm (see ur_controllers.yaml
         // set_last_command_interface_value_as_state_on_activation). A jump here is a config error.
-        std::this_thread::sleep_for(200ms);
-        std::lock_guard<std::mutex> lock(mutex_);
+        // Watched over 300 ms, not sampled once: on the mock the arm jumped back to its pre-stream
+        // position for one cycle and returned (2026-11-19), which a single late sample misses.
         double jump = 0;
-        for (size_t i = 0; joints_ && i < before.size() && i < joints_->position.size(); ++i) {
-          jump = std::max(jump, std::abs(joints_->position[i] - before[i]));
+        const auto watch_end = now_steady() + rclcpp::Duration(300ms);
+        while (now_steady() < watch_end) {
+          {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (size_t i = 0; joints_ && i < before.size() && i < joints_->position.size(); ++i) {
+              jump = std::max(jump, std::abs(joints_->position[i] - before[i]));
+            }
+          }
+          std::this_thread::sleep_for(1ms);
         }
+        std::lock_guard<std::mutex> lock(mutex_);
         if (jump > 0.01) {
           RCLCPP_ERROR(get_logger(), "arm moved %.3f rad after switching back to trajectories", jump);
           if (stop_reason_ == kNoStop || stop_reason_ == Result::STOPPED_REQUEST) {
@@ -940,6 +1018,10 @@ private:
   uint64_t stream_commands_{0};
   std::string stream_problem_;
   rclcpp::Time last_command_{0, 0, RCL_STEADY_TIME};
+  double collision_stale_, collision_wait_;
+  std::mutex collision_mutex_;
+  std::optional<tahoma_interfaces::msg::CollisionStatus> collision_;
+  rclcpp::Time last_collision_{0, 0, RCL_STEADY_TIME};
 
   std::mutex bond_mutex_;
   std::unique_ptr<bond::Bond> bond_;

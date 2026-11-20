@@ -5,6 +5,9 @@ string bond_id              # the guard this client holds
 string command_topic        # sensor_msgs/JointState on the shared domain: names + velocity, e.g. /mpc/joint_velocity_cmd
 float64 max_velocity        # rad/s per joint, required, > 0, at most the server's ceiling; above it ends the session (no clamping)
 float64 force_limit_n       # required, > 0, at most the server's max_force_limit_n. Passing it ends the session.
+string collision_status_topic  # required: tahoma_interfaces/CollisionStatus from the collision monitor, e.g. /collision_monitor/status
+string collision_scene      # required: the monitor's scene this session needs; the session starts only on a fresh clear
+                            # status for it and stops on a collision, another scene, or no status for collision_stale_s
 ---
 uint8 UNSET=0
 uint8 STOPPED_REQUEST=4     # cancelled by the client: the normal end
@@ -14,6 +17,7 @@ uint8 ABORTED_GUARD_LOST=7
 uint8 REJECTED=8
 uint8 FAILED=9
 uint8 ABORTED_BAD_COMMAND=11   # not finite, unknown or missing joint, or above max_velocity
+uint8 ABORTED_COLLISION=12     # the collision monitor reported a collision now or within its horizon (or another scene)
 uint8 outcome
 string message
 float64 peak_force_n

@@ -3,10 +3,12 @@ project(tahoma_interfaces)
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   action/ExecuteTrajectory.action
   action/StreamVelocity.action
+  msg/CollisionStatus.msg
   srv/Connect.srv
-  DEPENDENCIES sensor_msgs trajectory_msgs)
+  DEPENDENCIES sensor_msgs std_msgs trajectory_msgs)
 ament_package()

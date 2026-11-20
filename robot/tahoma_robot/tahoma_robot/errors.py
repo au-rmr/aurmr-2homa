@@ -35,3 +35,7 @@ class GuardLost(RobotError):
 
 class BadCommand(ExecutionFailed):
     """A streamed command was not finite, named the wrong joints or was above the session's max velocity."""
+
+
+class CollisionPredicted(ExecutionFailed):
+    """The collision monitor saw the arm in collision, or about to be, during a stream session."""

@@ -1,0 +1,7 @@
+<library path="ur_like_mock_system">
+  <class name="tahoma_control/UrLikeMockSystem"
+         type="tahoma_control::UrLikeMockSystem"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>mock_components/GenericSystem that resets position commands to the measured joints when a position interface starts, as ur_robot_driver does (ur_mock only).</description>
+  </class>
+</library>
