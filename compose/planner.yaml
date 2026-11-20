@@ -22,10 +22,28 @@ x-planner: &planner
     - ..:/repo:ro
     - ${HOME}/aurmr-data:/data:ro
     - planner_cache:/root/.cache       # Kit shader + extension caches: first start is slow, later ones reuse it
+    - ../runs:/runs                    # run records (gitignored): scenario, plan, solution, logs per episode
   stdin_open: true
   tty: true
 
 services:
+  # The bin-clearing planner node (S7): one episode per run (wait for poses, plan, stream MPPI commands).
+  #   AURMR_HOST=pinkman docker compose -f compose/planner.yaml run --rm planner [--planner mcts] [--out /runs/...]
+  planner:
+    <<: *planner
+    profiles: [planner]
+    entrypoint: ["python", "-m", "bin_clearing_ros.planner_node"]
+    command: []
+
+  # Test double for the robot + cameras (policies/bin_clearing_ros/tests/fake_cell.py), e.g.
+  #   ... run --rm planner_fake_cell --scenario /data/reference/.../scenarios/server_scenario.yaml --exit-after 20
+  planner_fake_cell:
+    <<: *planner
+    profiles: [test]
+    deploy: {}
+    entrypoint: ["python", "/repo/policies/bin_clearing_ros/tests/fake_cell.py"]
+    command: []
+
   planner_shell:
     <<: *planner
     profiles: [cli]
@@ -42,6 +60,7 @@ services:
       - ..:/repo:ro
       - ${HOME}/aurmr-data:/data:ro
       - planner_cache:/root/.cache
+      - ../runs:/runs
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - ${XAUTHORITY_HOST:-/dev/null}:/tmp/.Xauthority:ro
     command: bash

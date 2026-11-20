@@ -49,7 +49,7 @@ ENV OMNI_KIT_ACCEPT_EULA=YES \
     CYCLONEDDS_URI=file:///etc/cyclonedds.xml \
     ISAAC_ROS2=/opt/venv/lib/python3.11/site-packages/isaacsim/exts/isaacsim.ros2.bridge/jazzy
 ENV LD_LIBRARY_PATH=${ISAAC_ROS2}/lib \
-    PYTHONPATH=${ISAAC_ROS2}/rclpy:/repo/policies/bin_clearing/src
+    PYTHONPATH=${ISAAC_ROS2}/rclpy:/repo/policies/bin_clearing/src:/repo/policies/bin_clearing_ros
 COPY docker/cyclonedds.xml /etc/cyclonedds.xml
 # Vulkan + EGL loaders need NVIDIA's ICD files; the container toolkit mounts the driver libraries
 # (NVIDIA_DRIVER_CAPABILITIES=all) but not these. Without them Kit has no GPU device (no viewer, no GPU PhysX).
