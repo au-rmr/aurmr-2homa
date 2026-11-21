@@ -1,0 +1,17 @@
+# The MPC/MCTS demo's cameras (S7 stage 4): 2x RealSense D435i on winthrop USB 3, over the table.
+# Names and serials as in the old demo's launch (au-rmr/calib archive/2026-10/inter, apriltag_multi_tracking.launch).
+# Colour only: the tags need no depth. Extrinsics: from the camera calibration (not yet redone; the old values in
+# ~/refresh/phase3/mpc_mcts_notes.md are stale, the cameras were moved).
+cameras:
+  camera1: {serial: "215222077034"}
+  camera2: {serial: "909512071469"}
+color_profile: "1280,720,15"
+
+# Tag detection (apriltag_ros). As the old demo (calib workspace apriltag_ros/config/tags.yaml + settings.yaml,
+# 2026-09-06): tagStandard41h12, ids 0-70 all 20.2 mm, decimate 1.0, blur 0.4, max hamming 0.
+tags:
+  enabled: true
+  family: Standard41h12       # apriltag_ros name; the arm's calibration tags are 36h11 (36 mm)
+  size: 0.0202                # metres, the black square (NOT the printed edge: 41h12 has data bits outside it, ~36 mm)
+  decimate: 1.0               # apriltag detector downsampling; 1.0 = full resolution
+  blur: 0.4

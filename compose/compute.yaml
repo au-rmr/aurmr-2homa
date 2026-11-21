@@ -107,6 +107,47 @@ services:
       -p fps:=5 -p point_cloud:=false -p rgb_point_cloud:=false"
     restart: "no"
 
+  # The two D435i for the MPC/MCTS demo, on the cameras host (AURMR_HOST=winthrop). Profile realsense. Camera
+  # domain 77, loopback only unless CAMERA_LAN_IP = the host's robot-LAN address (for mpc_tag_viewer on the GUI
+  # host). Image built locally on both hosts: AURMR_HOST=<host> docker compose -f compose/compute.yaml build realsense
+  # Viewer preset (detection on, any site setting):
+  #   AURMR_HOST=winthrop CAMERA_LAN_IP=<its LAN IP> docker compose -f compose/compute.yaml run -d --name rs realsense \
+  #     bash -c "source /opt/ros/jazzy/setup.bash && exec ros2 launch /repo/perception/mpc_cubes/launch/cameras.launch.py site_dir:=/repo/sites/uw_lab tags:=view [family:=36h11]"
+  realsense:
+    <<: *ros
+    image: ${REALSENSE_IMAGE:-aurmr-2homa/realsense:draft}
+    build: {context: .., dockerfile: docker/realsense/Dockerfile}
+    profiles: [realsense]
+    device_cgroup_rules: ["c 81:* rmw", "c 189:* rmw"]
+    volumes:
+      - /dev:/dev
+      - ..:/repo:ro
+    environment:
+      ROS_DOMAIN_ID: "77"
+      ROBOT_LAN_IP: ${CAMERA_LAN_IP:-127.0.0.1}
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+      exec ros2 launch /repo/perception/mpc_cubes/launch/cameras.launch.py
+      site_dir:=/repo/sites/$${AURMR_SITE:-uw_lab}"
+    restart: "no"
+
+  # Live window of both MPC cameras + their tag detections (tests/perception/mpc_tag_viewer.py), on the GUI host,
+  # camera domain 77 over the LAN (the cameras need CAMERA_LAN_IP, above). Needs DISPLAY + XAUTHORITY (display.env).
+  mpc_tag_viewer:
+    <<: *ros
+    image: ${REALSENSE_IMAGE:-aurmr-2homa/realsense:draft}
+    profiles: [realsense]
+    volumes:
+      - ..:/repo:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${XAUTHORITY:?set XAUTHORITY}:/tmp/.Xauthority:ro
+    environment:
+      ROS_DOMAIN_ID: "77"
+      DISPLAY: ${DISPLAY:?set DISPLAY}
+      XAUTHORITY: /tmp/.Xauthority
+    command: bash -c "source /opt/ros/jazzy/setup.bash && exec python3 /repo/tests/perception/mpc_tag_viewer.py"
+    restart: "no"
+
   perception:
     <<: *ros
     image: ${PERCEPTION_IMAGE:-aurmr-2homa/perception:draft}
