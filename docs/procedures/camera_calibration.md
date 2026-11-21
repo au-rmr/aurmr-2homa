@@ -35,3 +35,25 @@ Person at the e-stop. Nothing is commanded: the person moves the arm in freedriv
 `sites/uw_lab/calibration/camera_cal_poses.yaml` holds the 15 joint poses of 2026-11-16 (checked by a person:
 reachable, clear, a tag in view). A replay through motion_server (capped speed, pod scene) with the same sampling and
 solve turns a camera swap into one command; its first run on the arm needs the usual go.
+
+## RealSense pair (MPC/MCTS demo), RUN 2026-11-20
+Result: `sites/uw_lab/calibration/camera1.yaml`, `camera2.yaml` (base_link -> `cameraN_color_optical_frame`); raw
+data `sites/uw_lab/calibration_data/mpc_cameras_2026-11-20/`. Same method and arm tags as above; differences:
+1. Cameras on the cameras host (winthrop), camera domain 77 over the robot LAN, arm tags detected by apriltag_ros:
+   `AURMR_HOST=winthrop CAMERA_LAN_IP=<its LAN IP> docker compose -f compose/compute.yaml run -d --name rs realsense
+   bash -c "source /opt/ros/jazzy/setup.bash && exec ros2 launch /repo/perception/mpc_cubes/launch/cameras.launch.py
+   site_dir:=/repo/sites/uw_lab tags:=view family:=36h11 size:=0.036"`; live view on the GUI host:
+   `AURMR_HOST=inter docker compose -f compose/compute.yaml run -d --name mpc_viewer mpc_tag_viewer` (both cameras
+   side by side; bottom bar = tags both see).
+2. Per pose (both cameras, one arm sample): `CAMERAS="camera1 camera2" CAM_LAN_IP=<compute host LAN IP>
+   tests/arm/handeye_pose.sh runs/<date>_mpc_camera_calibration/poses pNN`.
+3. Solve each camera directory: `handeye_solve.py runs/.../poses/cameraN --tags 35 43 42 --tag-size 0.036
+   --child cameraN_color_optical_frame --out cameraN.json`. Tag 42 is out of these cameras' view.
+4. Touch check (the acceptance test; the even/odd split needs ~8 views per tag per camera, which 12 poses did not
+   give): lay tagStandard41h12 tags flat in view (cameras back to the site settings), `tests/perception/tag_touch_check.py
+   <id> cameraN.json...` per tag on the camera domain, then touch each centre with the cap cup's aluminium end
+   (suction cup off, freedrive) and `tests/arm/touch_point.py tagN` in the robot-domain shell.
+2026-11-20: 12 poses, rms 2.23 / 1.91 px (floor ~2 px: adding poses did not lower it; not tag size, flatness, edges or
+one pose). Touch: camera1 4.3-8.3 mm, camera2 1.4-8.5 mm, mostly height (both read 1-8 mm high). Likely ~1 % focal
+error in the factory intrinsics (cameras report zero distortion). If it matters: fit fx, fy, cx, cy with the camera
+pose in handeye_solve.py (not written) and re-solve on the same poses + touches.

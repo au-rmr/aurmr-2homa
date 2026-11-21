@@ -152,6 +152,9 @@ def main():
     p.add_argument("--family", default="36h11")
     p.add_argument("--curved", type=int, nargs="*", default=[],
                    help="tags wrapped on a curved surface: their width and height are fitted too")
+    p.add_argument("--child", default="rgb_camera_link",
+                   help="the camera frame the result is for (optical: z forward, x right, y down); "
+                        "RealSense: <camera>_color_optical_frame")
     p.add_argument("--out")
     a = p.parse_args()
     poses = []   # (name, {link: T_base_link}, K, D, {tag: detection})
@@ -218,7 +221,7 @@ def main():
     print(f"ALL TAGS  camera at {np.round(T_base_cam[:3, 3], 4)} m; reprojection rms {rms:.2f} px, "
           f"worst corner {per_corner.max():.1f} px, {len(obs)} tag views")
     print("single-tag solutions vs joint (mm, deg): " + ", ".join(f"{t}: {v}" for t, v in agree.items()))
-    out = {"parent": "base_link", "child": "rgb_camera_link", "xyz": [float(v) for v in T_base_cam[:3, 3]],
+    out = {"parent": "base_link", "child": a.child, "xyz": [float(v) for v in T_base_cam[:3, 3]],
            "quat_xyzw": R_to_quat(T_base_cam[:3, :3]), "reprojection_rms_px": round(rms, 3),
            "worst_corner_px": round(float(per_corner.max()), 2), "views": len(obs), "poses": len(poses),
            "tags": {str(t): {"link": chosen[t][1], "xyz": [float(v) for v in Ts[1 + k][:3, 3]],

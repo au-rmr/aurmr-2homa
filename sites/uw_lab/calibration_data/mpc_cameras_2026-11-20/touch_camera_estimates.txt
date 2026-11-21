@@ -1,0 +1,7 @@
+# 2026-11-20 touch check, camera half (tests/perception/tag_touch_check.py, solve/camera{1,2}.json from p01-p13, 12 poses)
+# tagStandard41h12, size 0.0202 m; base_link m; tags lying flat; recorded BEFORE the touches (tags must not move)
+tag camera1                      camera2                      disagree_mm
+0   0.4907 0.2677 1.1997         0.4918 0.2687 1.1971         2.9
+1   0.3623 0.2717 1.1977         0.3622 0.2695 1.1949         3.6
+2   0.4934 0.3732 1.2008         0.4889 0.3715 1.2005         4.8
+3   0.3877 0.3686 1.2013         0.3820 0.3625 1.1989         8.7

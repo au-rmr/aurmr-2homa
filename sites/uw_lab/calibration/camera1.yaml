@@ -1,0 +1,15 @@
+# RealSense D435i camera1 (serial 215222077034, MPC/MCTS demo, winthrop) pose, 2026-11-20: eye-to-hand with AprilTags
+# (tag36h11, 36 mm) on the arm, 12 freedrive poses (p01-p13, no p05), tests/perception/handeye_solve.py (joint
+# reprojection fit), factory intrinsics (distortion reported 0). Raw data: calibration_data/mpc_cameras_2026-11-20/.
+# Tags: 35 on arm_forearm_link (wrist 1 cap), 43 on arm_wrist_2_link (wrist 3 cap); 42 never in view.
+# Reprojection rms 2.229 px, worst corner 6.1 px over 14 tag views; single-tag vs joint
+# (mm, deg): 35 [10.3, 0.36], 43 [2.2, 0.18]. Even/odd split not meaningful (too few views per tag per half).
+# CHECK (touch, cap cup aluminium end centred by eye on 4 flat tagStandard41h12 20.2 mm tags on the table):
+# camera vs touch 4.3, 5.0, 4.8, 8.3 mm (height +3.9 to +7.6 mm; sideways <= 3.4 mm).
+# Both cameras read tags 1-8 mm HIGH (likely ~1 % focal error in the
+# factory intrinsics); cameras agree with each other within 2.9-8.7 mm on those tags.
+# child = realsense2_camera's camera1_color_optical_frame (z forward, x right, y down).
+parent: base_link
+child: camera1_color_optical_frame
+xyz: [0.47605, 0.62645, 1.50570]
+quat_xyzw: [0.029205, 0.880804, -0.472566, 0.003592]

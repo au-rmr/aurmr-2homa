@@ -1,0 +1,81 @@
+p01: tags 35: 65px/0.30px; link spread 0.06 mm
+p02: tags 35: 76px/0.37px; link spread 0.04 mm
+p03: tags 35: 71px/0.09px; link spread 0.06 mm
+p04: tags 35: 96px/0.15px; link spread 0.04 mm
+p06: tags 35: 60px/0.53px, 43: 67px/0.03px; link spread 0.04 mm
+p07: tags 35: 71px/0.11px, 43: 82px/0.18px; link spread 0.03 mm
+p08: tags 35: 80px/0.19px; link spread 0.05 mm
+p09: tags 35: 70px/0.04px, 43: 65px/0.16px; link spread 0.05 mm
+p10: tags 35: 103px/0.23px, 43: 83px/0.04px; link spread 0.04 mm
+p11: tags 43: 59px/0.21px; link spread 0.05 mm
+p12: tags 43: 54px/0.35px; link spread 0.05 mm
+p13: tags 35: 128px/0.22px; link spread 0.04 mm
+tag 35: 10 poses; reprojection rms by link: arm_forearm_link 1.88px, arm_wrist_2_link 76.01px, arm_wrist_1_link 151.20px, arm_upper_arm_link 167.84px, arm_shoulder_link 227.79px, arm_wrist_3_link 534.90px, arm_tool0 534.90px
+tag 43: 6 poses; reprojection rms by link: arm_wrist_2_link 0.77px, arm_tool0 1.98px, arm_wrist_3_link 1.98px, arm_wrist_1_link 10.16px, arm_upper_arm_link 70.15px, arm_forearm_link 85.71px, arm_shoulder_link 157.77px
+tag 42: seen in 0 poses (< 4), not used
+joint fit started from tag 35's camera: rms 1.91 px
+joint fit started from tag 43's camera: rms 1.91 px
+ALL TAGS  camera at [0.0777 0.2319 1.4882] m; reprojection rms 1.91 px, worst corner 5.8 px, 16 tag views
+single-tag solutions vs joint (mm, deg): 35: (6.8, 0.79), 43: (4.2, 0.56)
+{
+ "parent": "base_link",
+ "child": "camera2_color_optical_frame",
+ "xyz": [
+  0.07774179162008137,
+  0.23192564834398507,
+  1.4881538402996353
+ ],
+ "quat_xyzw": [
+  -0.6504591336741637,
+  0.628916683032095,
+  -0.2865511999454769,
+  0.31504782340713156
+ ],
+ "reprojection_rms_px": 1.908,
+ "worst_corner_px": 5.75,
+ "views": 16,
+ "poses": 12,
+ "tags": {
+  "35": {
+   "link": "arm_forearm_link",
+   "xyz": [
+    -0.35615491342324185,
+    0.0017751037365400597,
+    -0.01915791742558614
+   ],
+   "quat_xyzw": [
+    0.7337635424601279,
+    -0.6779373563689132,
+    -0.039103148516092874,
+    0.021516235080085173
+   ],
+   "single_tag_rms_px": 1.878,
+   "single_vs_joint_mm_deg": [
+    6.8,
+    0.79
+   ]
+  },
+  "43": {
+   "link": "arm_wrist_2_link",
+   "xyz": [
+    0.00014053256735586044,
+    -0.05738235418968454,
+    0.0032959702070333064
+   ],
+   "quat_xyzw": [
+    0.475442706029579,
+    -0.48043445830688075,
+    0.5204353818750479,
+    0.5218083727262512
+   ],
+   "single_tag_rms_px": 0.768,
+   "single_vs_joint_mm_deg": [
+    4.2,
+    0.56
+   ]
+  }
+ },
+ "family": "36h11",
+ "tag_size_m": 0.036,
+ "curved_tags_fitted_size_m": {}
+}
